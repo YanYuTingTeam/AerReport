@@ -1,0 +1,38 @@
+name: AerReport
+version: 1.0.0
+main: com.aermini.report.AerReport
+author: AerMini
+
+commands:
+  report:
+    permission: aerreport.use
+    aliases: [r]
+  volunteer:
+    permission: aerreport.staff.main
+    aliases: [vt, reports, vr]
+  volunteern:
+    permission: aerreport.staff.main
+    aliases: [vtn, vban, vb, bans, reporter]
+  volun:
+    permission: aerreport.staff.unban
+    aliases: [vn, vunban, vun, unbans, reported]
+  aerreport:
+    permission: aerreport.admin
+    aliases: [ar, are, areport]
+
+permissions:
+  aerreport.use:
+    default: true
+  aerreport.staff.main:
+    default: op
+  aerreport.staff.alert:
+    default: op
+  aerreport.staff.unban:
+    default: op
+  aerreport.admin:
+    default: op
+  aerreport.admin.fullreset:
+    default: op
+
+softdepend:
+  - BungeeCord
