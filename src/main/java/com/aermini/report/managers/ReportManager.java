@@ -28,7 +28,7 @@ public class ReportManager {
     private final Map<UUID, Integer> staffPages; // vtn页码
     private final Map<UUID, ReportRecord> selectedReports; // 选中的举报记录
     // reportID -> staffUUID
-    private final Map<Integer, String> processingReports = new HashMap<>();
+    private final java.util.Map<Integer, String> processingReports = new java.util.concurrent.ConcurrentHashMap<>();
     public ReportManager(AerReport plugin) {
         this.plugin = plugin;
         this.db = plugin.getDatabaseManager();
@@ -284,12 +284,14 @@ public class ReportManager {
     public void cancelProcessing(int reportId, String staffUuid) {
         String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'pending', " +
                 "processing_by = NULL, processing_time = NULL WHERE id = ? AND processing_by = ?";
-        try {
-            db.update(sql, reportId, staffUuid);
-            processingReports.remove(reportId);
-        } catch (SQLException e) {
-            plugin.getLogger().severe("取消处理状态失败 -> " + e.getMessage());
-        }
+        db.asyncRun(() -> {
+            try {
+                db.update(sql, reportId, staffUuid);
+            } catch (SQLException e) {
+                plugin.getLogger().severe("取消处理状态失败 -> " + e.getMessage());
+            }
+        });
+        processingReports.remove(reportId);
     }
 
     public String getProcessingBy(int reportId) {
@@ -377,24 +379,25 @@ public class ReportManager {
     public void processReport(int reportId, String staffUuid, String staffName, String reasonId, String reasonName) {
         long processTime = System.currentTimeMillis();
         ReportRecord record = getReport(reportId);
-        String banId = null;
-        if (record != null) banId = getLatestBanId(record.getReportedUuid(), processTime); // 取封禁编号
+        String banId = record != null ? getLatestBanId(record.getReportedUuid(), processTime) : null; // 取封禁编号
         String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'processed', " +
                 "processed_by = ?, processed_by_name = ?, processed_time = ?, " +
                 "processed_reason_id = ?, processed_reason_name = ?, " +
                 "ban_id = ?, processing_by = NULL WHERE id = ?";
-        try {
-            db.update(sql, staffUuid, staffName, processTime, reasonId, reasonName, banId, reportId);
-            if (record != null) {
-                linkOtherReports(record.getReportedUuid(), reportId);
-                logAction(reportId, staffUuid, staffName, "process", record.getReporterUuid(), 
-                        record.getReportedUuid(), reasonId, null);
+        db.asyncRun(() -> {
+            try {
+                db.update(sql, staffUuid, staffName, processTime, reasonId, reasonName, banId, reportId);
+                if (record != null) {
+                    linkOtherReports(record.getReportedUuid(), reportId);
+                    logAction(reportId, staffUuid, staffName, "process", record.getReporterUuid(), 
+                            record.getReportedUuid(), reasonId, null);
+                }
+            } catch (SQLException e) {
+                plugin.getLogger().severe("处理举报失败 -> " + e.getMessage());
+                e.printStackTrace();
             }
-            processingReports.remove(reportId);
-        } catch (SQLException e) {
-            plugin.getLogger().severe("处理举报失败 -> " + e.getMessage());
-            e.printStackTrace();
-        }
+        });
+        processingReports.remove(reportId);
     }
 
     private String getLatestBanId(String reportedUuid, long processTime) {
@@ -435,18 +438,20 @@ public class ReportManager {
         long processTime = System.currentTimeMillis();
         String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'fake', " +
                 "processed_by = ?, processed_by_name = ?, processed_time = ?, processing_by = NULL WHERE id = ?";
-        try {
-            db.update(sql, staffUuid, staffName, processTime, reportId);
-            ReportRecord record = getReport(reportId);
-            if (record != null) {
-                logAction(reportId, staffUuid, staffName, "fake", record.getReporterUuid(), 
-                        record.getReportedUuid(), "虚假举报", null);
+        db.asyncRun(() -> {
+            try {
+                db.update(sql, staffUuid, staffName, processTime, reportId);
+                ReportRecord record = getReport(reportId);
+                if (record != null) {
+                    logAction(reportId, staffUuid, staffName, "fake", record.getReporterUuid(), 
+                            record.getReportedUuid(), "虚假举报", null);
+                }
+            } catch (SQLException e) {
+                plugin.getLogger().severe("判定虚假举报失败 -> " + e.getMessage());
+                e.printStackTrace();
             }
-            processingReports.remove(reportId);
-        } catch (SQLException e) {
-            plugin.getLogger().severe("判定虚假举报失败 -> " + e.getMessage());
-            e.printStackTrace();
-        }
+        });
+        processingReports.remove(reportId);
     }
 
     public void batchMarkAsFake(String reportedUuid, int excludeReportId, String staffUuid, String staffName) {
@@ -454,14 +459,16 @@ public class ReportManager {
         String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'fake', " +
                 "processed_by = ?, processed_time = ?, linked_report_id = ?, processing_by = NULL " +
                 "WHERE reported = ? AND status IN ('pending', 'processing') AND id != ?";
-        try {
-            int count = db.update(sql, staffUuid, processTime, excludeReportId, reportedUuid, excludeReportId);
-            plugin.getLogger().info("批量判定虚假举报: reportedUuid=" + reportedUuid + 
-                    ", excludeReportId=" + excludeReportId + ", 更新了 " + count + " 条记录");
-        } catch (SQLException e) {
-            plugin.getLogger().severe("批量判定虚假举报失败 -> " + e.getMessage());
-            e.printStackTrace();
-        }
+        db.asyncRun(() -> {
+            try {
+                int count = db.update(sql, staffUuid, processTime, excludeReportId, reportedUuid, excludeReportId);
+                plugin.getLogger().info("批量判定虚假举报: reportedUuid=" + reportedUuid + 
+                        ", excludeReportId=" + excludeReportId + ", 更新了 " + count + " 条记录");
+            } catch (SQLException e) {
+                plugin.getLogger().severe("批量判定虚假举报失败 -> " + e.getMessage());
+                e.printStackTrace();
+            }
+        });
     }
 
     private void linkOtherReports(String reportedUuid, int reportId) {
@@ -472,6 +479,19 @@ public class ReportManager {
         } catch (SQLException e) {
             plugin.getLogger().severe("关联其他举报失败 -> " + e.getMessage());
         }
+    }
+
+    public void asyncFullResetAllData(Player player) {
+        db.asyncRun(() -> {
+            int count = fullResetAllData();
+            java.util.Map<String, String> placeholders = new java.util.HashMap<>();
+            placeholders.put("count", String.valueOf(count));
+            final int finalCount = count;
+            org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
+                player.sendMessage(plugin.getConfigManager().getMessage("admin.fullreset-success", placeholders));
+                plugin.getLogger().info(player.getName() + " 执行了完全重置操作，清空了 " + finalCount + " 条数据");
+            });
+        });
     }
 
     public List<ReportRecord> getOtherPendingReports(String reportedUuid, int excludeReportId) {
@@ -537,34 +557,40 @@ public class ReportManager {
         String sql = "INSERT INTO " + db.getTablePrefix() + "players " +
                 "(uuid, name, current_server, last_online, is_online) VALUES (?, ?, ?, ?, ?) " +
                 "ON DUPLICATE KEY UPDATE name = ?, current_server = ?, last_online = ?, is_online = ?";
-        try {
-            long time = System.currentTimeMillis();
-            db.update(sql, uuid.toString(), name, server, time, online, name, server, time, online);
-        } catch (SQLException e) {
-            plugin.getLogger().severe("更新玩家信息失败 -> " + e.getMessage());
-        }
+        long time = System.currentTimeMillis();
+        db.asyncRun(() -> {
+            try {
+                db.update(sql, uuid.toString(), name, server, time, online, name, server, time, online);
+            } catch (SQLException e) {
+                plugin.getLogger().severe("更新玩家信息失败 -> " + e.getMessage());
+            }
+        });
     }
 
     public void incrementReportCount(UUID uuid, String name) {
         String sql = "INSERT INTO " + db.getTablePrefix() + "players " +
                 "(uuid, name, report_count) VALUES (?, ?, 1) " +
                 "ON DUPLICATE KEY UPDATE report_count = report_count + 1";
-        try {
-            db.update(sql, uuid.toString(), name);
-        } catch (SQLException e) {
-            plugin.getLogger().severe("更新举报次数失败 -> " + e.getMessage());
-        }
+        db.asyncRun(() -> {
+            try {
+                db.update(sql, uuid.toString(), name);
+            } catch (SQLException e) {
+                plugin.getLogger().severe("更新举报次数失败 -> " + e.getMessage());
+            }
+        });
     }
 
     public void incrementReportedCount(UUID uuid, String name) {
         String sql = "INSERT INTO " + db.getTablePrefix() + "players " +
                 "(uuid, name, reported_count) VALUES (?, ?, 1) " +
                 "ON DUPLICATE KEY UPDATE reported_count = reported_count + 1";
-        try {
-            db.update(sql, uuid.toString(), name);
-        } catch (SQLException e) {
-            plugin.getLogger().severe("更新被举报次数失败 -> " + e.getMessage());
-        }
+        db.asyncRun(() -> {
+            try {
+                db.update(sql, uuid.toString(), name);
+            } catch (SQLException e) {
+                plugin.getLogger().severe("更新被举报次数失败 -> " + e.getMessage());
+            }
+        });
     }
     
     public String getProcessingReport(String staffUuid) {

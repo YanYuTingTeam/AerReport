@@ -36,7 +36,7 @@ public class ChatManager {
     public void recordMessage(UUID uuid, String name, String message) {
         List<String> messages = recentMessages.computeIfAbsent(uuid, k -> new CopyOnWriteArrayList<>());
         messages.add(message);
-        if (messages.size() > MAX_MESSAGES) messages.remove(0); // 保留最近n条. 在config中配置
+        if (messages.size() > MAX_MESSAGES) messages.remove(0);
         asyncDbPool.execute(() -> {
             long time = System.currentTimeMillis();
             String server = plugin.getServerName();

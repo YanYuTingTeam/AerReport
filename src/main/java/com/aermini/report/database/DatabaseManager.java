@@ -205,13 +205,8 @@ public class DatabaseManager {
         return tablePrefix;
     }
 
-    public ResultSet query(String sql, Object... params) throws SQLException {
-        Connection conn = getConnection();
-        PreparedStatement stmt = conn.prepareStatement(sql);
-        for (int i = 0; i < params.length; i++) {
-            stmt.setObject(i + 1, params[i]);
-        }
-        return stmt.executeQuery();
+    public void asyncRun(Runnable task) {
+        org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
     }
 
     public int update(String sql, Object... params) throws SQLException {

@@ -24,7 +24,7 @@ public class VolunteerManager {
 
     public void enterObserverMode(Player player, String originalServer) {
         originalLocations.put(player.getUniqueId(), player.getLocation().clone());
-        databaseManager.saveVolunteerState(player.getUniqueId(), player.getName(), originalServer);
+        databaseManager.asyncRun(() -> databaseManager.saveVolunteerState(player.getUniqueId(), player.getName(), originalServer));
     }
 
     public boolean exitObserverMode(Player player) {
@@ -38,7 +38,7 @@ public class VolunteerManager {
         plugin.getTeleportManager().restoreGameMode(player);
         if (player.getGameMode() == GameMode.SPECTATOR) player.setGameMode(GameMode.SURVIVAL);
         if (needTransfer) {
-            databaseManager.setVolunteerPendingExit(uuid, true);
+            databaseManager.asyncRun(() -> databaseManager.setVolunteerPendingExit(uuid, true));
             plugin.getBungeeManager().sendToServer(player, originalServer);
             Map<String, String> placeholders = new HashMap<>();
             placeholders.put("server", originalServer);
@@ -51,7 +51,7 @@ public class VolunteerManager {
             } else {
                 player.sendMessage(plugin.getConfigManager().getMessage("volunteer.exit-nolocation"));
             }
-            databaseManager.removeVolunteerState(uuid);
+            databaseManager.asyncRun(() -> databaseManager.removeVolunteerState(uuid));
         }
         return true;
     }
@@ -63,14 +63,16 @@ public class VolunteerManager {
         if (player.getGameMode() == GameMode.SPECTATOR) player.setGameMode(GameMode.SURVIVAL);
         Location originalLocation = originalLocations.remove(uuid);
         if (originalLocation != null && originalLocation.getWorld() != null) player.teleport(originalLocation);
-        databaseManager.removeVolunteerState(uuid);
+        databaseManager.asyncRun(() -> databaseManager.removeVolunteerState(uuid));
     }
 
     public void checkAndRestoreFromObserverMode(Player player) {
         UUID uuid = player.getUniqueId();
         if (databaseManager.isVolunteerPendingExit(uuid)) {
-            databaseManager.setVolunteerPendingExit(uuid, false);
-            databaseManager.removeVolunteerState(uuid);
+            databaseManager.asyncRun(() -> {
+                databaseManager.setVolunteerPendingExit(uuid, false);
+                databaseManager.removeVolunteerState(uuid);
+            });
             plugin.getTeleportManager().restoreGameMode(player);
             if (player.getGameMode() == GameMode.SPECTATOR) player.setGameMode(GameMode.SURVIVAL);
             player.sendMessage(plugin.getConfigManager().getMessage("volunteer.restore-success"));

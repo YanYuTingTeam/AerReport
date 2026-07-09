@@ -35,18 +35,19 @@ public class TeleportManager {
                 "(staff_uuid, target_uuid, target_name, target_server, target_x, target_y, target_z, " +
                 "target_world, teleport_type, created_time, processed) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        try {
-            db.update(sql, staffUuid, targetUuid, targetName, targetServer, x, y, z, world, teleportType, time, false);
-            // 跨服传送时执行. 同服传送在processTeleportRequest中执行
-            if (!isSameServer) {
-                Player staff = plugin.getServer().getPlayer(UUID.fromString(staffUuid));
-                if (staff != null && staff.isOnline()) {
-                    saveAndSetSpectatorMode(staff);
-                    executeTeleportCommands(staff, targetName);
-                }
+        db.asyncRun(() -> {
+            try {
+                db.update(sql, staffUuid, targetUuid, targetName, targetServer, x, y, z, world, teleportType, time, false);
+            } catch (SQLException e) {
+                plugin.getLogger().severe("创建传送请求失败 -> " + e.getMessage());
             }
-        } catch (SQLException e) {
-            plugin.getLogger().severe("创建传送请求失败 -> " + e.getMessage());
+        });
+        if (!isSameServer) {
+            Player staff = plugin.getServer().getPlayer(UUID.fromString(staffUuid));
+            if (staff != null && staff.isOnline()) {
+                saveAndSetSpectatorMode(staff);
+                executeTeleportCommands(staff, targetName);
+            }
         }
     }
     
@@ -165,11 +166,13 @@ public class TeleportManager {
 
     private void markRequestProcessed(int requestId) {
         String sql = "UPDATE " + db.getTablePrefix() + "teleport SET processed = ? WHERE id = ?";
-        try {
-            db.update(sql, true, requestId);
-        } catch (SQLException e) {
-            plugin.getLogger().severe("标记传送请求失败 -> " + e.getMessage());
-        }
+        db.asyncRun(() -> {
+            try {
+                db.update(sql, true, requestId);
+            } catch (SQLException e) {
+                plugin.getLogger().severe("标记传送请求失败 -> " + e.getMessage());
+            }
+        });
     }
     
     public void executeCommandsForStaff(Player player) {

@@ -688,11 +688,7 @@ public class GUIListener implements Listener {
         if (rawSlot == 11 || rawSlot == 12 || rawSlot == 20) {
             // confirm
             player.closeInventory();
-            int count = reportManager.fullResetAllData();
-            Map<String, String> placeholders = new HashMap<>();
-            placeholders.put("count", String.valueOf(count));
-            player.sendMessage(configManager.getMessage("admin.fullreset-success", placeholders));
-            plugin.getLogger().info(player.getName() + " 执行了完全重置操作，清空了 " + count + " 条数据");
+            reportManager.asyncFullResetAllData(player);
             return;
         }
     }

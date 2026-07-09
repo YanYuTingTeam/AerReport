@@ -154,7 +154,6 @@ public class GUIManager {
     public void openPanelGUI(Player player, int page) {
         MenuConfig menuConfig = config.getMenuConfig("panel");
         if (menuConfig == null) return;
-        reportManager.cleanupExpiredProcessing();
         String title = menuConfig.getTitle();
         Inventory inv = Bukkit.createInventory(null, menuConfig.getSlot(), title);
         ItemStack mainItem = GUIUtils.createItem(menuConfig.getItem("main"), 1,
