@@ -11,32 +11,43 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class ChatManager {
     private final AerReport plugin;
     private final DatabaseManager db;
     private final ConcurrentHashMap<UUID, List<String>> recentMessages;
+    private final ExecutorService asyncDbPool;
     private static final int MAX_MESSAGES = 5;
 
     public ChatManager(AerReport plugin) {
         this.plugin = plugin;
         this.db = plugin.getDatabaseManager();
         this.recentMessages = new ConcurrentHashMap<>();
+        this.asyncDbPool = Executors.newFixedThreadPool(2, r -> {
+            Thread t = new Thread(r, "AerReport-ChatDB");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     public void recordMessage(UUID uuid, String name, String message) {
-        List<String> messages = recentMessages.computeIfAbsent(uuid, k -> new ArrayList<>());
+        List<String> messages = recentMessages.computeIfAbsent(uuid, k -> new CopyOnWriteArrayList<>());
         messages.add(message);
         if (messages.size() > MAX_MESSAGES) messages.remove(0); // 保留最近n条. 在config中配置
-        long time = System.currentTimeMillis();
-        String server = plugin.getServerName();
-        String sql = "INSERT INTO " + db.getTablePrefix() + "chat " +
-                "(uuid, name, server, message, time) VALUES (?, ?, ?, ?, ?)";
-        try {
-            db.update(sql, uuid.toString(), name, server, message, time);
-        } catch (SQLException e) {
-            plugin.getLogger().severe("记录聊天失败 -> " + e.getMessage());
-        }
+        asyncDbPool.execute(() -> {
+            long time = System.currentTimeMillis();
+            String server = plugin.getServerName();
+            String sql = "INSERT INTO " + db.getTablePrefix() + "chat " +
+                    "(uuid, name, server, message, time) VALUES (?, ?, ?, ?, ?)";
+            try {
+                db.update(sql, uuid.toString(), name, server, message, time);
+            } catch (SQLException e) {
+                plugin.getLogger().severe("记录聊天失败 -> " + e.getMessage());
+            }
+        });
     }
 
     public String getRecentMessages(UUID uuid) {

@@ -42,6 +42,8 @@ public class DatabaseManager {
         jdbcUrl.append("&prepStmtCacheSqlLimit=2048");
         jdbcUrl.append("&serverTimezone=Asia/Shanghai");
         jdbcUrl.append("&allowPublicKeyRetrieval=true");
+        jdbcUrl.append("&socketTimeout=10000");
+        jdbcUrl.append("&connectTimeout=10000");
         config.setJdbcUrl(jdbcUrl.toString());
         config.setUsername(username);
         config.setPassword(password);
