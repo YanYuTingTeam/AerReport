@@ -421,26 +421,36 @@ public class GUIListener implements Listener {
                 plugin.getTeleportManager().saveAndSetSpectatorMode(player);
                 player.teleport(target.getLocation());
                 player.sendMessage(configManager.getMessage("teleport.to-player-current", placeholders));
-            } else {
-                plugin.getPlayerDataManager().getPlayerServer(targetName, server -> {
-                    if (server != null) {
-                        plugin.getTeleportManager().createTeleportRequest(
-                                player.getUniqueId().toString(),
-                                targetUuid,
-                                targetName,
-                                server,
-                                0, 0, 0, "world",
-                                "current",
-                                false
-                        );
-                        plugin.getBungeeManager().sendToServer(player, server);
-                        placeholders.put("server", server);
-                        player.sendMessage(configManager.getMessage("teleport.to-player-cross-server", placeholders));
-                    } else {
-                        player.sendMessage(configManager.getMessage("teleport.player-not-found"));
-                    }
-                });
+                return;
             }
+            plugin.getPlayerDataManager().getPlayerServer(java.util.UUID.fromString(targetUuid), server -> {
+                if (server == null) {
+                    player.sendMessage(configManager.getMessage("teleport.player-not-found"));
+                    return;
+                }
+                if (server.equals(plugin.getServerName())) {
+                    Player targetNow = Bukkit.getPlayerExact(targetName);
+                    if (targetNow != null && targetNow.isOnline()) {
+                        plugin.getTeleportManager().saveAndSetSpectatorMode(player);
+                        player.teleport(targetNow.getLocation());
+                        player.sendMessage(configManager.getMessage("teleport.to-player-current", placeholders));
+                        return;
+                    }
+                }
+                plugin.getTeleportManager().createTeleportRequest(
+                        player.getUniqueId().toString(),
+                        targetUuid,
+                        targetName,
+                        server,
+                        0, 0, 0, "world",
+                        "current",
+                        false
+                );
+                plugin.getBungeeManager().sendServerInvite(player.getUniqueId(), UUID.fromString(targetUuid), server);
+                plugin.getBungeeManager().sendToServer(player, server);
+                placeholders.put("server", server);
+                player.sendMessage(configManager.getMessage("teleport.to-player-cross-server", placeholders));
+            });
         }
     }
 

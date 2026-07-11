@@ -4,106 +4,86 @@ import com.aermini.report.AerReport;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 public class PlayerDataManager {
     private final AerReport plugin;
     private Map<String, Long> playerJoinTimes = new ConcurrentHashMap<>();
+    private Map<UUID, Consumer<String>> serverCallbacks = new ConcurrentHashMap<>();
 
     public PlayerDataManager(AerReport plugin) {
         this.plugin = plugin;
-        setupForwarding();
+        setupChannel();
     }
-    
+
     public void recordPlayerJoin(String playerName) {
         playerJoinTimes.put(playerName, System.currentTimeMillis());
     }
-    
+
     public long getPlayerJoinTime(String playerName) {
         return playerJoinTimes.getOrDefault(playerName, 0L);
     }
-    
+
     public void clearPlayerJoinTime(String playerName) {
         playerJoinTimes.remove(playerName);
     }
 
-    private void setupForwarding() {
-        plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, "BungeeCord",
+    private void setupChannel() {
+        plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, "AerServerPulse");
+        plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, "AerServerPulse",
                 (channel, player, message) -> {
-                    if (!channel.equals("BungeeCord")) return;
+                    if (!"AerServerPulse".equals(channel)) return;
                     try {
-                        java.io.ByteArrayInputStream byteIn = new java.io.ByteArrayInputStream(message);
-                        DataInputStream in = new DataInputStream(byteIn);
-                        String subchannel = in.readUTF();
-                        if (subchannel.equals("AerReport")) {
-                            // subchannel + dataLength + data
-                            short dataLength = in.readShort();
-                            byte[] data = new byte[dataLength];
-                            in.readFully(data);
-                            try (DataInputStream dataIn = new DataInputStream(new java.io.ByteArrayInputStream(data))) {
-                                String action = dataIn.readUTF();
-                                if (action.equals("PlayerServer")) {
-                                    String playerName = dataIn.readUTF();
-                                    String server = dataIn.readUTF();
-                                    handlePlayerServerResponse(playerName, server);
-                                }
-                            } catch (IOException e) {
-                                plugin.getLogger().severe("解析消息失败 -> " + e.getMessage());
+                        DataInputStream in = new DataInputStream(new ByteArrayInputStream(message));
+                        String action = in.readUTF();
+                        if ("resp".equals(action)) {
+                            String uuidStr = in.readUTF();
+                            String server = in.readUTF();
+                            UUID uuid = UUID.fromString(uuidStr);
+                            Consumer<String> callback = serverCallbacks.remove(uuid);
+                            if (callback != null) {
+                                callback.accept("null".equals(server) ? null : server);
                             }
                         }
-                    } catch (IOException e) {
-                        plugin.getLogger().severe("处理消息失败 -> " + e.getMessage());
+                    } catch (Exception e) {
+                        plugin.getLogger().severe("处理AerServerPulse响应失败 -> " + e.getMessage());
                     }
                 });
     }
 
-    private java.util.Map<String, Consumer<String>> callbacks = new java.util.concurrent.ConcurrentHashMap<>();
-
-    public void getPlayerServer(String playerName, Consumer<String> callback) {
-        callbacks.put(playerName, callback);
-        ByteArrayOutputStream b = new ByteArrayOutputStream();
-        DataOutputStream out = new DataOutputStream(b);
+    public void getPlayerServer(UUID playerUuid, Consumer<String> callback) {
+        serverCallbacks.put(playerUuid, callback);
         try {
-            out.writeUTF("Forward");
-            out.writeUTF("ALL");
-            out.writeUTF("AerReport");
-            
-            ByteArrayOutputStream msgBytes = new ByteArrayOutputStream();
-            DataOutputStream msgOut = new DataOutputStream(msgBytes);
-            msgOut.writeUTF("GetPlayerServer");
-            msgOut.writeUTF(playerName);
-            
-            out.writeShort(msgBytes.toByteArray().length);
-            out.write(msgBytes.toByteArray());
+            ByteArrayOutputStream b = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(b);
+            out.writeUTF("query");
+            out.writeUTF(playerUuid.toString());
+            if (!Bukkit.getOnlinePlayers().isEmpty()) {
+                Player sender = Bukkit.getOnlinePlayers().iterator().next();
+                sender.sendPluginMessage(plugin, "AerServerPulse", b.toByteArray());
+            } else {
+                serverCallbacks.remove(playerUuid);
+                callback.accept(null);
+                return;
+            }
         } catch (IOException e) {
-            plugin.getLogger().severe("获取玩家服务器失败 -> " + e.getMessage());
+            plugin.getLogger().severe("发送AerServerPulse查询失败 -> " + e.getMessage());
+            serverCallbacks.remove(playerUuid);
             callback.accept(null);
             return;
         }
-        
-        if (!Bukkit.getOnlinePlayers().isEmpty()) {
-            Player sender = Bukkit.getOnlinePlayers().iterator().next();
-            sender.sendPluginMessage(plugin, "BungeeCord", b.toByteArray());
-        } else {
-            callback.accept(null);
-        }
-        // timeout
+        // timeout 200ticks(10s)
         Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-            if (callbacks.containsKey(playerName)) {
-                callbacks.remove(playerName);
-                callback.accept(null);
-            }
-        }, 60L);
-    }
-
-    private void handlePlayerServerResponse(String playerName, String server) {
-        Consumer<String> callback = callbacks.remove(playerName);
-        if (callback != null)  callback.accept(server);
+            Consumer<String> cb = serverCallbacks.remove(playerUuid);
+            if (cb != null) cb.accept(null);
+        }, 200L);
     }
 }

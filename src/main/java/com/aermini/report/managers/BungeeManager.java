@@ -42,6 +42,25 @@ public class BungeeManager implements PluginMessageListener {
         try {
             plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, "BungeeCord");
             plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, "BungeeCord", this);
+            plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, "BungeeCord",
+                    (channel, player, message) -> {
+                        if (!"BungeeCord".equals(channel)) return;
+                        try {
+                            java.io.ByteArrayInputStream byteIn = new java.io.ByteArrayInputStream(message);
+                            DataInputStream in = new DataInputStream(byteIn);
+                            String sub = in.readUTF();
+                            if ("serverinvite".equals(sub)) {
+                                String data = in.readUTF();
+                                String[] parts = data.split(",", -1);
+                                if (parts.length >= 2) {
+                                    java.util.UUID staffUuid = java.util.UUID.fromString(parts[0].trim());
+                                    java.util.UUID targetUuid = java.util.UUID.fromString(parts[1].trim());
+                                    handleServerInvite(staffUuid, targetUuid);
+                                }
+                            }
+                        } catch (Exception ignored) {
+                        }
+                    });
             initialized = true;
             plugin.getLogger().info("BungeeCord通道已注册");
         } catch (Exception e) {
@@ -286,8 +305,75 @@ public class BungeeManager implements PluginMessageListener {
         player.sendPluginMessage(plugin, "BungeeCord", out.toByteArray());
     }
 
+    public void sendServerInvite(java.util.UUID staffUuid, java.util.UUID targetUuid, String targetServer) {
+        if (!initialized) return;
+        Player sender = getRandomPlayer();
+        if (sender == null) return;
+        try {
+            java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+            java.io.DataOutputStream out = new java.io.DataOutputStream(bytes);
+            out.writeUTF("serverinvite");
+            out.writeUTF(staffUuid.toString() + "," + targetUuid.toString());
+            ByteArrayDataOutput bungeeOut = ByteStreams.newDataOutput();
+            bungeeOut.writeUTF("Forward");
+            bungeeOut.writeUTF(targetServer);
+            bungeeOut.writeUTF("BungeeCord");
+            byte[] msgData = bytes.toByteArray();
+            bungeeOut.writeShort(msgData.length);
+            bungeeOut.write(msgData);
+            sender.sendPluginMessage(plugin, "BungeeCord", bungeeOut.toByteArray());
+        } catch (Exception e) {
+            plugin.getLogger().severe("发送serverinvite失败 -> " + e.getMessage());
+        }
+    }
+
     public void registerMessageHandler(BiConsumer<String, String[]> handler) {
         messageHandlers.add(handler);
+    }
+
+    private void handleServerInvite(java.util.UUID staffUuid, java.util.UUID targetUuid) {
+        Player staff = Bukkit.getPlayer(staffUuid);
+        if (staff == null || !staff.isOnline()) return;
+        Player target = Bukkit.getPlayer(targetUuid);
+        if (target == null || !target.isOnline()) return;
+        try {
+            Class<?> matchUtils = Class.forName("io.github.bedwarsrel.utils.match.MatchUtils");
+            java.lang.reflect.Method handleMethod = matchUtils.getMethod("handleProxyChannelMessage", String.class);
+            handleMethod.invoke(null, staffUuid.toString() + "," + targetUuid.toString());
+            plugin.getLogger().info("serverinvite: 通过BedwarsRel加入游戏 " + staff.getName() + " -> " + target.getName());
+            return;
+        } catch (ClassNotFoundException ignored) {
+        } catch (Exception e) {
+            plugin.getLogger().warning("BedwarsRel调用失败: " + e.getMessage());
+        }
+        try {
+            Class<?> matchUtils = Class.forName("com.walrusone.skywarsreloaded.utilities.MatchUtils");
+            Class<?> matchManager = Class.forName("com.walrusone.skywarsreloaded.managers.MatchManager");
+            java.lang.reflect.Method getManager = matchManager.getMethod("get");
+            Object mm = getManager.invoke(null);
+            java.lang.reflect.Method getPlayerMap = matchManager.getMethod("getPlayerMap", org.bukkit.entity.Player.class);
+            Object gameMap = getPlayerMap.invoke(mm, target);
+            Class<?> gameMapClass = Class.forName("com.walrusone.skywarsreloaded.game.GameMap");
+            Class<?> teamCardClass = Class.forName("com.walrusone.skywarsreloaded.game.TeamCard");
+            java.lang.reflect.Method addPlayers = gameMapClass.getMethod("addPlayers", teamCardClass, org.bukkit.entity.Player.class);
+            if (gameMap != null) {
+                addPlayers.invoke(gameMap, null, staff);
+                plugin.getLogger().info("serverinvite: 通过SkyWarsRel加入游戏 " + staff.getName() + " -> " + target.getName());
+                return;
+            }
+            // target不在游戏中，找最佳房间
+            java.lang.reflect.Method getBest = matchUtils.getMethod("getBestArena");
+            Object bestGame = getBest.invoke(null);
+            if (bestGame != null) {
+                addPlayers.invoke(bestGame, null, staff);
+                plugin.getLogger().info("serverinvite: SkyWarsRel加入最佳房间 " + staff.getName());
+                return;
+            }
+        } catch (ClassNotFoundException ignored) {
+        } catch (Exception e) {
+            plugin.getLogger().warning("SkyWarsRel调用失败: " + e.getMessage());
+        }
+        plugin.getLogger().info("serverinvite: 无可用游戏插件，跳过自动加入");
     }
 
     public boolean isInitialized() {
