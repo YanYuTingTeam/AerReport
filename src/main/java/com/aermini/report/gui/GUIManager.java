@@ -22,7 +22,7 @@ public class GUIManager {
     private final AerReport plugin;
     private final ConfigManager config;
     private final ReportManager reportManager;
-    private final java.util.Map<java.util.UUID, String> selectedPlayers = new java.util.HashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<java.util.UUID, String> selectedPlayers = new java.util.concurrent.ConcurrentHashMap<>();
 
     public GUIManager(AerReport plugin) {
         this.plugin = plugin;
@@ -36,6 +36,10 @@ public class GUIManager {
     
     public String getSelectedPlayer(org.bukkit.entity.Player player) {
         return selectedPlayers.get(player.getUniqueId());
+    }
+    
+    public void removeSelectedPlayer(java.util.UUID uuid) {
+        selectedPlayers.remove(uuid);
     }
     
     private int getSlot(MenuConfig menuConfig, String itemName) {

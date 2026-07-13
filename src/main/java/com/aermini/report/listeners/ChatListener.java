@@ -62,14 +62,16 @@ public class ChatListener implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
+        java.util.UUID uuid = event.getPlayer().getUniqueId();
         plugin.getPlayerDataManager().clearPlayerJoinTime(event.getPlayer().getName());
         plugin.getReportManager().updatePlayerInfo(
-                event.getPlayer().getUniqueId(),
+                uuid,
                 event.getPlayer().getName(),
                 plugin.getServerName(),
                 false
         );
-        plugin.getReportManager().removeSelectedReport(event.getPlayer().getUniqueId());
+        plugin.getReportManager().cleanupPlayerData(uuid);
+        plugin.getGUIManager().removeSelectedPlayer(uuid);
         // 要考虑到切子服而退出服务器 于是不在此处重置处理中状态
         // cleanupExpiredProcessing负责定期处理. 见 ReportManager.java
     }

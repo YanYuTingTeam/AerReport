@@ -53,6 +53,7 @@ public class DatabaseManager {
         config.setIdleTimeout(30000);
         config.setConnectionTimeout(10000);
         config.setMaxLifetime(1800000);
+        config.setValidationTimeout(5000);
         config.setLeakDetectionThreshold(60000);
         config.setPoolName("AerReport-Pool");
         config.setConnectionTestQuery("SELECT 1");
@@ -88,7 +89,7 @@ public class DatabaseManager {
                 "reported_z DOUBLE, " +
                 "reported_world VARCHAR(64), " +
                 "chat_messages TEXT, " +
-                "status ENUM('pending', 'processing', 'processed', 'fake') DEFAULT 'pending', " +
+                "status ENUM('pending', 'processing', 'processed', 'fake', 'unbanned') DEFAULT 'pending', " +
                 "processing_by VARCHAR(36), " +
                 "processing_time BIGINT, " +
                 "processed_by VARCHAR(36), " +
@@ -183,6 +184,10 @@ public class DatabaseManager {
             stmt.execute(createTeleportTable);
             stmt.execute(createLogsTable);
             stmt.execute(createVolunteerStateTable);
+            try {
+                stmt.execute("ALTER TABLE " + tablePrefix + "reports " +
+                        "MODIFY COLUMN status ENUM('pending','processing','processed','fake','unbanned') DEFAULT 'pending'");
+            } catch (SQLException ignored) {}
         } catch (SQLException e) {
             plugin.getLogger().severe("创建数据表失败 -> " + e.getMessage());
             e.printStackTrace();

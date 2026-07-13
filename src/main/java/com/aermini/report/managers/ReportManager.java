@@ -23,19 +23,19 @@ public class ReportManager {
 
     private final AerReport plugin;
     private final DatabaseManager db;
-    private final Map<UUID, Long> cooldowns;
-    private final Map<UUID, Integer> playerPages; // vt页码
-    private final Map<UUID, Integer> staffPages; // vtn页码
-    private final Map<UUID, ReportRecord> selectedReports; // 选中的举报记录
+    private final java.util.concurrent.ConcurrentHashMap<UUID, Long> cooldowns;
+    private final java.util.concurrent.ConcurrentHashMap<UUID, Integer> playerPages; // vt页码
+    private final java.util.concurrent.ConcurrentHashMap<UUID, Integer> staffPages; // vtn页码
+    private final java.util.concurrent.ConcurrentHashMap<UUID, ReportRecord> selectedReports; // 选中的举报记录
     // reportID -> staffUUID
-    private final java.util.Map<Integer, String> processingReports = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<Integer, String> processingReports = new java.util.concurrent.ConcurrentHashMap<>();
     public ReportManager(AerReport plugin) {
         this.plugin = plugin;
         this.db = plugin.getDatabaseManager();
-        this.cooldowns = new HashMap<>();
-        this.playerPages = new HashMap<>();
-        this.staffPages = new HashMap<>();
-        this.selectedReports = new HashMap<>();
+        this.cooldowns = new java.util.concurrent.ConcurrentHashMap<>();
+        this.playerPages = new java.util.concurrent.ConcurrentHashMap<>();
+        this.staffPages = new java.util.concurrent.ConcurrentHashMap<>();
+        this.selectedReports = new java.util.concurrent.ConcurrentHashMap<>();
     }
 
     public boolean isInCooldown(UUID uuid) {
@@ -412,9 +412,8 @@ public class ReportManager {
         String sql = "SELECT id FROM " + tableName + " WHERE uuid = ? AND time >= ? ORDER BY id DESC LIMIT 1";
         try (Connection conn = db.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-            String uuidNoDash = reportedUuid.replace("-", "");
             long searchTime = processTime - 300000;
-            stmt.setString(1, uuidNoDash);
+            stmt.setString(1, reportedUuid);
             stmt.setLong(2, searchTime);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) return String.valueOf(rs.getInt("id"));
@@ -449,6 +448,25 @@ public class ReportManager {
             } catch (SQLException e) {
                 plugin.getLogger().severe("判定虚假举报失败 -> " + e.getMessage());
                 e.printStackTrace();
+            }
+        });
+        processingReports.remove(reportId);
+    }
+
+    public void markAsUnbanned(int reportId, String staffUuid, String staffName) {
+        long processTime = System.currentTimeMillis();
+        String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'unbanned', " +
+                "processed_by = ?, processed_by_name = ?, processed_time = ?, processing_by = NULL WHERE id = ?";
+        db.asyncRun(() -> {
+            try {
+                db.update(sql, staffUuid, staffName, processTime, reportId);
+                ReportRecord record = getReport(reportId);
+                if (record != null) {
+                    logAction(reportId, staffUuid, staffName, "unban", record.getReporterUuid(),
+                            record.getReportedUuid(), "解封", null);
+                }
+            } catch (SQLException e) {
+                plugin.getLogger().severe("标记解封失败 -> " + e.getMessage());
             }
         });
         processingReports.remove(reportId);
@@ -661,6 +679,12 @@ public class ReportManager {
     public void setStaffPage(UUID uuid, int page) {staffPages.put(uuid, page);}
     public void setSelectedReport(UUID uuid, ReportRecord record) {selectedReports.put(uuid, record);}
     public void removeSelectedReport(UUID uuid) {selectedReports.remove(uuid);}
+    public void cleanupPlayerData(UUID uuid) {
+        cooldowns.remove(uuid);
+        playerPages.remove(uuid);
+        staffPages.remove(uuid);
+        selectedReports.remove(uuid);
+    }
     
     public int fullResetAllData() {
         int totalCount = 0;

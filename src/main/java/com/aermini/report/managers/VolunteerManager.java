@@ -68,18 +68,21 @@ public class VolunteerManager {
 
     public void checkAndRestoreFromObserverMode(Player player) {
         UUID uuid = player.getUniqueId();
-        if (databaseManager.isVolunteerPendingExit(uuid)) {
-            databaseManager.asyncRun(() -> {
+        databaseManager.asyncRun(() -> {
+            boolean pending = databaseManager.isVolunteerPendingExit(uuid);
+            if (pending) {
                 databaseManager.setVolunteerPendingExit(uuid, false);
                 databaseManager.removeVolunteerState(uuid);
-            });
-            plugin.getTeleportManager().restoreGameMode(player);
-            if (player.getGameMode() == GameMode.SPECTATOR) player.setGameMode(GameMode.SURVIVAL);
-            player.sendMessage(plugin.getConfigManager().getMessage("volunteer.restore-success"));
-        }
+                org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
+                    plugin.getTeleportManager().restoreGameMode(player);
+                    if (player.getGameMode() == GameMode.SPECTATOR) player.setGameMode(GameMode.SURVIVAL);
+                    player.sendMessage(plugin.getConfigManager().getMessage("volunteer.restore-success"));
+                });
+            }
+        });
     }
 
     public boolean isInObserverMode(UUID playerUuid) {
-        return databaseManager.getVolunteerOriginalServer(playerUuid) != null;
+        return originalLocations.containsKey(playerUuid);
     }
 }
