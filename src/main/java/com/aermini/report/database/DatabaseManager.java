@@ -28,26 +28,23 @@ public class DatabaseManager {
         String database = plugin.getConfigManager().getConfig().getString("database.database", "minecraft");
         this.tablePrefix = plugin.getConfigManager().getConfig().getString("database.table_prefix", "aerreport_");
         HikariConfig config = new HikariConfig();
-        StringBuilder jdbcUrl = new StringBuilder();
-        jdbcUrl.append("jdbc:mysql://").append(address).append(":").append(port).append("/").append(database);
-        jdbcUrl.append("?useSSL=false");
-        jdbcUrl.append("&useUnicode=true");
-        jdbcUrl.append("&characterEncoding=UTF-8");
-        jdbcUrl.append("&autoReconnect=true");
-        jdbcUrl.append("&failOverReadOnly=false");
-        jdbcUrl.append("&maxReconnects=10");
-        jdbcUrl.append("&useServerPrepStmts=false");
-        jdbcUrl.append("&cachePrepStmts=true");
-        jdbcUrl.append("&prepStmtCacheSize=250");
-        jdbcUrl.append("&prepStmtCacheSqlLimit=2048");
-        jdbcUrl.append("&serverTimezone=Asia/Shanghai");
-        jdbcUrl.append("&allowPublicKeyRetrieval=true");
-        jdbcUrl.append("&socketTimeout=10000");
-        jdbcUrl.append("&connectTimeout=10000");
-        config.setJdbcUrl(jdbcUrl.toString());
+        config.setJdbcUrl("jdbc:mysql://" + address + ":" + port + "/" + database +
+                "?useSSL=false" +
+                "&useUnicode=true" +
+                "&characterEncoding=UTF-8" +
+                "&autoReconnect=true" +
+                "&failOverReadOnly=false" +
+                "&maxReconnects=10" +
+                "&useServerPrepStmts=false" +
+                "&cachePrepStmts=true" +
+                "&prepStmtCacheSize=250" +
+                "&prepStmtCacheSqlLimit=2048" +
+                "&serverTimezone=Asia/Shanghai" +
+                "&allowPublicKeyRetrieval=true" +
+                "&socketTimeout=10000" +
+                "&connectTimeout=10000");
         config.setUsername(username);
         config.setPassword(password);
-        config.setDriverClassName("com.aermini.report.lib.mysql.cj.jdbc.Driver");
         config.setMaximumPoolSize(10);
         config.setMinimumIdle(2);
         config.setIdleTimeout(30000);
