@@ -1,6 +1,8 @@
 package com.aermini.report.managers;
 
 import com.aermini.report.AerReport;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -37,24 +39,28 @@ public class PlayerDataManager {
     }
 
     private void setupChannel() {
-        plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, "AerServerPulse");
-        plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, "AerServerPulse",
+        plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, "aermonitor:main");
+        plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, "aermonitor:main",
                 (channel, player, message) -> {
-                    if (!"AerServerPulse".equals(channel)) return;
+                    if (!"aermonitor:main".equals(channel)) return;
                     try {
                         DataInputStream in = new DataInputStream(new ByteArrayInputStream(message));
-                        String action = in.readUTF();
-                        if ("resp".equals(action)) {
-                            String uuidStr = in.readUTF();
-                            String server = in.readUTF();
+                        String jsonStr = in.readUTF();
+                        JsonObject resp = new JsonParser().parse(jsonStr).getAsJsonObject();
+
+                        if (resp.has("uuid") && resp.has("server")) {
+                            String uuidStr = resp.get("uuid").getAsString();
                             UUID uuid = UUID.fromString(uuidStr);
+                            JsonObject server = resp.getAsJsonObject("server");
+                            String serverName = server.has("name") && !server.get("name").isJsonNull()
+                                    ? server.get("name").getAsString() : null;
                             Consumer<String> callback = serverCallbacks.remove(uuid);
                             if (callback != null) {
-                                callback.accept("null".equals(server) ? null : server);
+                                callback.accept(serverName);
                             }
                         }
                     } catch (Exception e) {
-                        plugin.getLogger().severe("处理AerServerPulse响应失败 -> " + e.getMessage());
+                        plugin.getLogger().severe("处理aermonitor响应失败 -> " + e.getMessage());
                     }
                 });
     }
@@ -64,18 +70,22 @@ public class PlayerDataManager {
         try {
             ByteArrayOutputStream b = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(b);
-            out.writeUTF("query");
-            out.writeUTF(playerUuid.toString());
+
+            JsonObject req = new JsonObject();
+            req.addProperty("event", "getPlayerInfo");
+            req.addProperty("uuid", playerUuid.toString());
+            out.writeUTF(req.toString());
+
             if (!Bukkit.getOnlinePlayers().isEmpty()) {
                 Player sender = Bukkit.getOnlinePlayers().iterator().next();
-                sender.sendPluginMessage(plugin, "AerServerPulse", b.toByteArray());
+                sender.sendPluginMessage(plugin, "aermonitor:main", b.toByteArray());
             } else {
                 serverCallbacks.remove(playerUuid);
                 callback.accept(null);
                 return;
             }
         } catch (IOException e) {
-            plugin.getLogger().severe("发送AerServerPulse查询失败 -> " + e.getMessage());
+            plugin.getLogger().severe("发送aermonitor查询失败 -> " + e.getMessage());
             serverCallbacks.remove(playerUuid);
             callback.accept(null);
             return;
