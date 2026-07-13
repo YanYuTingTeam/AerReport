@@ -60,7 +60,7 @@ public class PlayerDataManager {
                             }
                         }
                     } catch (Exception e) {
-                        plugin.getLogger().severe("处理aermonitor响应失败 -> " + e.getMessage());
+                        plugin.getLogger().severe("处理aermonitor:main响应失败 -> " + e.getMessage());
                     }
                 });
     }
@@ -85,7 +85,7 @@ public class PlayerDataManager {
                 return;
             }
         } catch (IOException e) {
-            plugin.getLogger().severe("发送aermonitor查询失败 -> " + e.getMessage());
+            plugin.getLogger().severe("发送aermonitor:main查询失败 -> " + e.getMessage());
             serverCallbacks.remove(playerUuid);
             callback.accept(null);
             return;
@@ -95,5 +95,25 @@ public class PlayerDataManager {
             Consumer<String> cb = serverCallbacks.remove(playerUuid);
             if (cb != null) cb.accept(null);
         }, 200L);
+    }
+
+    public void notifyStaff(String permission, String message) {
+        try {
+            ByteArrayOutputStream b = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(b);
+
+            JsonObject req = new JsonObject();
+            req.addProperty("event", "notifyStaff");
+            req.addProperty("permission", permission);
+            req.addProperty("message", message);
+            out.writeUTF(req.toString());
+
+            if (!Bukkit.getOnlinePlayers().isEmpty()) {
+                Player sender = Bukkit.getOnlinePlayers().iterator().next();
+                sender.sendPluginMessage(plugin, "aermonitor:main", b.toByteArray());
+            }
+        } catch (IOException e) {
+            plugin.getLogger().severe("发送notifyStaff失败 -> " + e.getMessage());
+        }
     }
 }

@@ -197,12 +197,12 @@ public class GUIListener implements Listener {
                     }
                     String chatMessages = "";
                     if (reason.getType().equals("chat")) chatMessages=plugin.getChatManager().getRecentMessages(reported.getUniqueId());
-                    int reportId = reportManager.createReport(player,
-                            reported.getUniqueId().toString(),
-                            reportedName,
-                            reason.getId(),
-                            reason.getName(),
-                            reason.getType(),
+                    int reportId = reportManager.createReport(player, 
+                            reported.getUniqueId().toString(), 
+                            reportedName, 
+                            reason.getId(), 
+                            reason.getName(), 
+                            reason.getType(), 
                             chatMessages);
                     if (reportId > 0) {
                         reportManager.setCooldown(player.getUniqueId());
@@ -250,12 +250,12 @@ public class GUIListener implements Listener {
                             guiManager.openAdminGUI(player, existingReport);
                         } else {
                             String chatMessages = plugin.getChatManager().getRecentMessages(target.getUniqueId());
-                            int reportId = reportManager.createReport(player,
-                                    target.getUniqueId().toString(),
-                                    target.getName(),
-                                    "volunteer",
-                                    "志愿者直接处罚",
-                                    "other",
+                            int reportId = reportManager.createReport(player, 
+                                    target.getUniqueId().toString(), 
+                                    target.getName(), 
+                                    "volunteer", 
+                                    "志愿者直接处罚", 
+                                    "other", 
                                     chatMessages);
                             if (reportId > 0) {
                                 ReportRecord record = reportManager.getReport(reportId);
@@ -334,8 +334,8 @@ public class GUIListener implements Listener {
             if (!otherReports.isEmpty()) {
                 guiManager.openAdminCancelsGUI(player, record, otherReports);
             } else {
-                reportManager.markAsFake(record.getId(),
-                        player.getUniqueId().toString(),
+                reportManager.markAsFake(record.getId(), 
+                        player.getUniqueId().toString(), 
                         player.getName());
                 player.sendMessage(configManager.getMessage("gui.fake-report-single"));
                 player.closeInventory();
@@ -475,9 +475,9 @@ public class GUIListener implements Listener {
         }
         if (isClickInSlot(slot, menuConfig, "confirm")) {
             executePunish(record.getReportedName(), reason);
-            reportManager.processReport(record.getId(),
-                    player.getUniqueId().toString(),
-                    player.getName(),
+            reportManager.processReport(record.getId(), 
+                    player.getUniqueId().toString(), 
+                    player.getName(), 
                     reasonId,
                     reason.getName());
             Map<String, String> placeholders = new HashMap<>();
@@ -502,8 +502,8 @@ public class GUIListener implements Listener {
             return;
         }
         if (isClickInSlot(slot, menuConfig, "cancel")) {
-            reportManager.markAsFake(record.getId(),
-                    player.getUniqueId().toString(),
+            reportManager.markAsFake(record.getId(), 
+                    player.getUniqueId().toString(), 
                     player.getName());
             player.sendMessage(configManager.getMessage("gui.fake-report-single"));
             plugin.getVolunteerManager().restoreAfterProcess(player);
@@ -516,12 +516,12 @@ public class GUIListener implements Listener {
             return;
         }
         if (isClickInSlot(slot, menuConfig, "confirm")) {
-            reportManager.markAsFake(record.getId(),
-                    player.getUniqueId().toString(),
+            reportManager.markAsFake(record.getId(), 
+                    player.getUniqueId().toString(), 
                     player.getName());
-            reportManager.batchMarkAsFake(record.getReportedUuid(),
-                    record.getId(),
-                    player.getUniqueId().toString(),
+            reportManager.batchMarkAsFake(record.getReportedUuid(), 
+                    record.getId(), 
+                    player.getUniqueId().toString(), 
                     player.getName());
             player.sendMessage(configManager.getMessage("gui.fake-report-batch"));
             plugin.getVolunteerManager().restoreAfterProcess(player);
@@ -557,7 +557,7 @@ public class GUIListener implements Listener {
                 reported.performCommand(command);
             } else if (cmd.startsWith("[MESSAGE] ")) {
                 if (reported != null && reported.isOnline()) {
-                    reported.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                    reported.sendMessage(ChatColor.translateAlternateColorCodes('&', 
                             cmd.substring("[MESSAGE] ".length())));
                 }
             }
@@ -567,7 +567,13 @@ public class GUIListener implements Listener {
     private void notifyStaff(String reportedName, String reason, String server, int reportId) {
         long notifyTime = System.currentTimeMillis();
         notifyLocalStaff(reportedName, reason, server, notifyTime, reportId);
-        plugin.getBungeeManager().broadcastReportAlert(reportedName, reason, server, reportId);
+
+        Map<String, String> placeholders = new HashMap<>();
+        placeholders.put("reported", reportedName);
+        placeholders.put("reason", reason);
+        placeholders.put("server", server);
+        String message = configManager.getMessage("alert", placeholders);
+        plugin.getPlayerDataManager().notifyStaff("aerreport.staff.alert", message);
     }
 
     private void notifyLocalStaff(String reportedName, String reason, String server, long notifyTime, int reportId) {
@@ -577,9 +583,9 @@ public class GUIListener implements Listener {
         placeholders.put("server", server);
         String message = configManager.getMessage("alert", placeholders);
         TextComponent clickableMessage = new TextComponent(message);
-        clickableMessage.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,
+        clickableMessage.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, 
                 "/volunteer open " + reportId));
-        clickableMessage.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+        clickableMessage.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, 
                 new TextComponent[]{new TextComponent("§7点击处理第§f§l"+reportId+"§r§7号举报")}));
         long notifyThreshold = configManager.getConfig().getLong("settings.notify-threshold", 1000);
         for (Player p : Bukkit.getOnlinePlayers()) {
@@ -602,7 +608,7 @@ public class GUIListener implements Listener {
         Material expectedMaterial = GUIUtils.parseMaterial(configItem);
         return item.getType() == expectedMaterial;
     }
-
+    
     private boolean isClickInSlot(int rawSlot, MenuConfig menuConfig, String itemName) {
         List<Integer> slots = menuConfig.getSlots(itemName);
         return slots != null && slots.contains(rawSlot);
@@ -614,11 +620,11 @@ public class GUIListener implements Listener {
         }
         return null;
     }
-
+    
     public void cleanupPlayerData(UUID uuid) {
         selectedReasons.remove(uuid);
     }
-
+    
     private void handleUnbanPanelClick(Player player, ItemStack item, int rawSlot) {
         MenuConfig menuConfig = configManager.getMenuConfig("unbanpanel");
         if (isClickInSlot(rawSlot, menuConfig, "main")) {
@@ -653,7 +659,7 @@ public class GUIListener implements Listener {
             }
         }
     }
-
+    
     private void handleUnbanAdminClick(Player player, ItemStack item, int rawSlot) {
         MenuConfig menuConfig = configManager.getMenuConfig("unbanadmin");
         ReportRecord record = reportManager.getSelectedReport(player.getUniqueId());
@@ -692,8 +698,8 @@ public class GUIListener implements Listener {
         }
         if (isClickInSlot(rawSlot, menuConfig, "confirm")) {
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "unban " + record.getReportedName());
-            reportManager.markAsUnbanned(record.getId(),
-                    player.getUniqueId().toString(),
+            reportManager.markAsUnbanned(record.getId(), 
+                    player.getUniqueId().toString(), 
                     player.getName());
             Map<String, String> placeholders = new HashMap<>();
             placeholders.put("reported", record.getReportedName());

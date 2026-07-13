@@ -1,6 +1,9 @@
 package com.aermini.report.managers;
 
 import com.aermini.report.AerReport;
+import com.google.common.io.ByteArrayDataInput;
+import com.google.common.io.ByteArrayDataOutput;
+import com.google.common.io.ByteStreams;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.messaging.PluginMessageListener;
@@ -81,28 +84,18 @@ public class BungeeManager implements PluginMessageListener {
         
         Player player = getRandomPlayer();
         if (player == null) return;
-        try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(byteOut);
-            out.writeUTF("GetServer");
-            player.sendPluginMessage(plugin, "BungeeCord", byteOut.toByteArray());
-        } catch (IOException e) {
-            plugin.getLogger().severe("发送GetServer请求失败 -> " + e.getMessage());
-        }
+        ByteArrayDataOutput out = ByteStreams.newDataOutput();
+        out.writeUTF("GetServer");
+        player.sendPluginMessage(plugin, "BungeeCord", out.toByteArray());
     }
 
     public void collectServers() {
         if (!initialized) return;
         Player player = getRandomPlayer();
         if (player == null) return;
-        try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(byteOut);
-            out.writeUTF("GetServers");
-            player.sendPluginMessage(plugin, "BungeeCord", byteOut.toByteArray());
-        } catch (IOException e) {
-            plugin.getLogger().severe("发送GetServers请求失败 -> " + e.getMessage());
-        }
+        ByteArrayDataOutput out = ByteStreams.newDataOutput();
+        out.writeUTF("GetServers");
+        player.sendPluginMessage(plugin, "BungeeCord", out.toByteArray());
     }
 
     private Player getRandomPlayer() {
@@ -114,7 +107,7 @@ public class BungeeManager implements PluginMessageListener {
     public void onPluginMessageReceived(String channel, Player player, byte[] message) {
         if (!channel.equals("BungeeCord")) return;
         try {
-            DataInputStream in = new DataInputStream(new ByteArrayInputStream(message));
+            ByteArrayDataInput in = ByteStreams.newDataInput(message);
             String subchannel = in.readUTF();
             switch (subchannel) {
                 case "GetServer":
@@ -166,7 +159,7 @@ public class BungeeManager implements PluginMessageListener {
         }
     }
     
-    private void handlePluginNotification(DataInputStream in) {
+    private void handlePluginNotification(ByteArrayDataInput in) {
         try {
             short dataLength = in.readShort();
             byte[] data = new byte[dataLength];
@@ -204,22 +197,21 @@ public class BungeeManager implements PluginMessageListener {
         Player sender = getRandomPlayer();
         if (sender == null) return;
         try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(byteOut);
+            ByteArrayDataOutput out = ByteStreams.newDataOutput();
             out.writeUTF("Forward");
             out.writeUTF("ALL");
             out.writeUTF(SUB_CHANNEL);
-            ByteArrayOutputStream innerByteOut = new ByteArrayOutputStream();
-            DataOutputStream dataOut = new DataOutputStream(innerByteOut);
+            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+            DataOutputStream dataOut = new DataOutputStream(byteOut);
             dataOut.writeUTF("PlayerServer");
             dataOut.writeUTF(playerName);
             dataOut.writeUTF(server);
             
-            byte[] msgData = innerByteOut.toByteArray();
+            byte[] msgData = byteOut.toByteArray();
             out.writeShort(msgData.length);
             out.write(msgData);
             
-            sender.sendPluginMessage(plugin, "BungeeCord", byteOut.toByteArray());
+            sender.sendPluginMessage(plugin, "BungeeCord", out.toByteArray());
         } catch (Exception e) {
             plugin.getLogger().severe("发送响应失败 -> " + e.getMessage());
         }
@@ -278,15 +270,14 @@ public class BungeeManager implements PluginMessageListener {
     
     private void sendNotificationToServer(Player sender, String targetServer, byte[] data) {
         try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(byteOut);
+            ByteArrayDataOutput out = ByteStreams.newDataOutput();
             out.writeUTF("Forward");
             out.writeUTF(targetServer);
             out.writeUTF(SUB_CHANNEL);
             out.writeShort(data.length);
             out.write(data);
             
-            sender.sendPluginMessage(plugin, "BungeeCord", byteOut.toByteArray());
+            sender.sendPluginMessage(plugin, "BungeeCord", out.toByteArray());
         } catch (Exception e) {
             plugin.getLogger().severe("发送通知到服务器 " + targetServer + " 失败 -> " + e.getMessage());
         }
@@ -308,15 +299,10 @@ public class BungeeManager implements PluginMessageListener {
 
     public void sendToServer(Player player, String server) {
         if (!initialized) return;
-        try {
-            ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-            DataOutputStream out = new DataOutputStream(byteOut);
-            out.writeUTF("Connect");
-            out.writeUTF(server);
-            player.sendPluginMessage(plugin, "BungeeCord", byteOut.toByteArray());
-        } catch (IOException e) {
-            plugin.getLogger().severe("发送Connect请求失败 -> " + e.getMessage());
-        }
+        ByteArrayDataOutput out = ByteStreams.newDataOutput();
+        out.writeUTF("Connect");
+        out.writeUTF(server);
+        player.sendPluginMessage(plugin, "BungeeCord", out.toByteArray());
     }
 
     public void sendServerInvite(java.util.UUID staffUuid, java.util.UUID targetUuid, String targetServer) {
@@ -328,15 +314,14 @@ public class BungeeManager implements PluginMessageListener {
             java.io.DataOutputStream out = new java.io.DataOutputStream(bytes);
             out.writeUTF("serverinvite");
             out.writeUTF(staffUuid.toString() + "," + targetUuid.toString());
-            java.io.ByteArrayOutputStream bungeeBytes = new java.io.ByteArrayOutputStream();
-            java.io.DataOutputStream bungeeOut = new java.io.DataOutputStream(bungeeBytes);
+            ByteArrayDataOutput bungeeOut = ByteStreams.newDataOutput();
             bungeeOut.writeUTF("Forward");
             bungeeOut.writeUTF(targetServer);
             bungeeOut.writeUTF("BungeeCord");
             byte[] msgData = bytes.toByteArray();
             bungeeOut.writeShort(msgData.length);
             bungeeOut.write(msgData);
-            sender.sendPluginMessage(plugin, "BungeeCord", bungeeBytes.toByteArray());
+            sender.sendPluginMessage(plugin, "BungeeCord", bungeeOut.toByteArray());
         } catch (Exception e) {
             plugin.getLogger().severe("发送serverinvite失败 -> " + e.getMessage());
         }
