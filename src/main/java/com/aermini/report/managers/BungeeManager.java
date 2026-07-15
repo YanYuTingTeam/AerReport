@@ -229,26 +229,6 @@ public class BungeeManager implements PluginMessageListener {
             collectServerName();
         }
     }
-
-    public void broadcastReportAlert(String reportedName, String reason, String server, int reportId) {
-        if (!initialized) return;
-        Player sender = getRandomPlayer();
-        if (sender == null) return;
-        long notifyTime = System.currentTimeMillis();
-        byte[] notificationData = buildNotificationData(MSG_REPORT_ALERT, notifyTime, 
-                reportedName, reason, server, String.valueOf(reportId));
-        if (notificationData == null) return;
-        
-        if (serversCollected && !knownServers.isEmpty()) {
-            for (String targetServer : knownServers) {
-                if (targetServer.equals(localServerName)) continue; // 跳过本服
-                sendNotificationToServer(sender, targetServer, notificationData);
-            }
-        } else {
-            pendingNotifications.add(notificationData);
-            collectServers();
-        }
-    }
     
     private byte[] buildNotificationData(String msgType, long notifyTime, String... args) {
         try {

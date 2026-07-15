@@ -566,7 +566,6 @@ public class GUIListener implements Listener {
 
     private void notifyStaff(String reportedName, String reason, String server, int reportId) {
         long notifyTime = System.currentTimeMillis();
-        notifyLocalStaff(reportedName, reason, server, notifyTime, reportId);
 
         Map<String, String> placeholders = new HashMap<>();
         placeholders.put("reported", reportedName);
