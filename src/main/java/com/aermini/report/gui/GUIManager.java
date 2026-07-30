@@ -1,5 +1,15 @@
 package com.aermini.report.gui;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+
 import com.aermini.report.AerReport;
 import com.aermini.report.managers.ConfigManager;
 import com.aermini.report.managers.ConfigManager.MenuConfig;
@@ -8,21 +18,16 @@ import com.aermini.report.managers.ReportManager;
 import com.aermini.report.models.PlayerInfo;
 import com.aermini.report.models.ReportRecord;
 import com.aermini.report.utils.GUIUtils;
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
-import org.bukkit.entity.Player;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
 public class GUIManager {
     private final AerReport plugin;
     private final ConfigManager config;
     private final ReportManager reportManager;
     private final java.util.concurrent.ConcurrentHashMap<java.util.UUID, String> selectedPlayers = new java.util.concurrent.ConcurrentHashMap<>();
+    // 防重复点击, 异步查库期间同一玩家的后续点击直接丢弃
+    private final java.util.Set<java.util.UUID> openingSet = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    // 面板渲染时缓存当页记录, 点击时不用再查库
+    private final java.util.concurrent.ConcurrentHashMap<java.util.UUID, java.util.Map<Integer, ReportRecord>> panelCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     public GUIManager(AerReport plugin) {
         this.plugin = plugin;
@@ -40,6 +45,29 @@ public class GUIManager {
     
     public void removeSelectedPlayer(java.util.UUID uuid) {
         selectedPlayers.remove(uuid);
+    }
+
+    public boolean startOpening(java.util.UUID uuid) {
+        return openingSet.add(uuid);
+    }
+
+    public void finishOpening(java.util.UUID uuid) {
+        openingSet.remove(uuid);
+    }
+
+    public ReportRecord getCachedPanelReport(java.util.UUID viewer, int reportId) {
+        java.util.Map<Integer, ReportRecord> cache = panelCache.get(viewer);
+        return cache != null ? cache.get(reportId) : null;
+    }
+
+    public void removePanelCache(java.util.UUID uuid) {
+        panelCache.remove(uuid);
+    }
+
+    private void openInvSync(Player player, Inventory inv) {
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (player.isOnline()) player.openInventory(inv);
+        });
     }
     
     private int getSlot(MenuConfig menuConfig, String itemName) {
@@ -158,6 +186,7 @@ public class GUIManager {
     public void openPanelGUI(Player player, int page) {
         MenuConfig menuConfig = config.getMenuConfig("panel");
         if (menuConfig == null) return;
+        plugin.getDatabaseManager().asyncRun(() -> {
         String title = menuConfig.getTitle();
         Inventory inv = Bukkit.createInventory(null, menuConfig.getSlot(), title);
         ItemStack mainItem = GUIUtils.createItem(menuConfig.getItem("main"), 1,
@@ -171,11 +200,14 @@ public class GUIManager {
         int totalPages = (int) Math.ceil((double) totalReports / pageSize);
         if (totalPages == 0) totalPages = 1;
         List<Integer> slots = menuConfig.getSlots("report");
+        java.util.Map<Integer, ReportRecord> pageCache = new java.util.HashMap<>();
         for (int i = 0; i < reports.size() && i < slots.size(); i++) {
             ReportRecord record = reports.get(i);
+            pageCache.put(record.getId(), record);
             ItemStack item = createReportItem(record, menuConfig, player);
             inv.setItem(slots.get(i), item);
         }
+        panelCache.put(player.getUniqueId(), pageCache);
         if (page > 1) {
             ItemStack prevItem = GUIUtils.createItem(menuConfig.getItem("prev"), 1,
                     menuConfig.getData("prev"), menuConfig.getName("prev"), new ArrayList<>());
@@ -189,7 +221,8 @@ public class GUIManager {
             if (nextSlot >= 0) inv.setItem(nextSlot, nextItem);
         }
         reportManager.setStaffPage(player.getUniqueId(), page);
-        player.openInventory(inv);
+        openInvSync(player, inv);
+        });
     }
 
     private ItemStack createReportItem(ReportRecord record, MenuConfig menuConfig, Player viewer) {
@@ -213,9 +246,10 @@ public class GUIManager {
         String itemMaterial;
         int itemData = 0;
         if ("processing".equals(record.getStatus())) {
-            String processingBy = reportManager.getProcessingByName(record.getId());
+            String processingUuid = record.getProcessingBy();
+            String processingBy = reportManager.getStaffNameByUuid(processingUuid);
             if (processingBy != null) {
-                if (viewer.getUniqueId().toString().equals(reportManager.getProcessingBy(record.getId()))) {
+                if (viewer.getUniqueId().toString().equals(processingUuid)) {
                     lore.add(0, GUIUtils.colorize("&e&l你正在处理此举报"));
                 } else {
                     lore.add(0, GUIUtils.colorize("&c&l正在被 " + processingBy + " 处理中..."));
@@ -233,6 +267,82 @@ public class GUIManager {
     public void openAdminGUI(Player player, ReportRecord record) {
         MenuConfig menuConfig = config.getMenuConfig("admin");
         if (menuConfig == null) return;
+        plugin.getDatabaseManager().asyncRun(() -> {
+        PlayerInfo reporterInfo = reportManager.getOrCreatePlayerInfo(
+                java.util.UUID.fromString(record.getReporterUuid()), record.getReporterName());
+        PlayerInfo reportedInfo = reportManager.getOrCreatePlayerInfo(
+                java.util.UUID.fromString(record.getReportedUuid()), record.getReportedName());
+        Inventory inv = buildAdminInv(menuConfig, record,
+                reporterInfo != null ? String.valueOf(reporterInfo.getReportCount()) : "0",
+                reporterInfo != null ? reporterInfo.getStatusText() : "离线",
+                reportedInfo != null ? reportedInfo.getStatusText() : "离线");
+        reportManager.setSelectedReport(player.getUniqueId(), record);
+        openInvSync(player, inv);
+        });
+    }
+
+    // 面板缓存命中时主线程直接开, 玩家信息异步查完再回填两个头颅
+    public void openAdminGUINow(Player player, ReportRecord record) {
+        MenuConfig menuConfig = config.getMenuConfig("admin");
+        if (menuConfig == null) return;
+        Inventory inv = buildAdminInv(menuConfig, record, "..", "查询中", "查询中");
+        reportManager.setSelectedReport(player.getUniqueId(), record);
+        player.openInventory(inv);
+        plugin.getDatabaseManager().asyncRun(() -> {
+            PlayerInfo reporterInfo = reportManager.getOrCreatePlayerInfo(
+                    java.util.UUID.fromString(record.getReporterUuid()), record.getReporterName());
+            PlayerInfo reportedInfo = reportManager.getOrCreatePlayerInfo(
+                    java.util.UUID.fromString(record.getReportedUuid()), record.getReportedName());
+            ItemStack reporterHead = buildReporterHead(menuConfig, record,
+                    reporterInfo != null ? String.valueOf(reporterInfo.getReportCount()) : "0",
+                    reporterInfo != null ? reporterInfo.getStatusText() : "离线");
+            ItemStack reportedHead = buildReportedHead(menuConfig, record,
+                    reportedInfo != null ? reportedInfo.getStatusText() : "离线");
+            String title = menuConfig.getTitle().replace("{reported}", record.getReportedName());
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!player.isOnline()) return;
+                if (!player.getOpenInventory().getTitle().equals(title)) return; // 已切界面就不回填
+                Inventory top = player.getOpenInventory().getTopInventory();
+                int reporterSlot = getSlot(menuConfig, "report_player");
+                if (reporterSlot >= 0) top.setItem(reporterSlot, reporterHead);
+                int reportedSlot = getSlot(menuConfig, "reported_player");
+                if (reportedSlot >= 0) top.setItem(reportedSlot, reportedHead);
+            });
+        });
+    }
+
+    private ItemStack buildReporterHead(MenuConfig menuConfig, ReportRecord record, String rCount, String rOnline) {
+        List<String> reporterLore = new ArrayList<>(menuConfig.getLore("report_player"));
+        for (int i = 0; i < reporterLore.size(); i++) {
+            String line = reporterLore.get(i);
+            line = line.replace("{player}", record.getReporterName())
+                      .replace("{r_server}", record.getServer())
+                      .replace("{r_reportCount}", rCount)
+                      .replace("{r_online}", rOnline);
+            reporterLore.set(i, line);
+        }
+        return GUIUtils.createPlayerHead(record.getReporterName(),
+                menuConfig.getName("report_player").replace("{player}", record.getReporterName()),
+                reporterLore);
+    }
+
+    private ItemStack buildReportedHead(MenuConfig menuConfig, ReportRecord record, String dOnline) {
+        List<String> reportedLore = new ArrayList<>(menuConfig.getLore("reported_player"));
+        for (int i = 0; i < reportedLore.size(); i++) {
+            String line = reportedLore.get(i);
+            line = line.replace("{server}", record.getServer())
+                      .replace("{reported}", record.getReportedName())
+                      .replace("{reportCount}", String.valueOf(record.getReportCount()))
+                      .replace("{reportCounts}", String.valueOf(record.getReportCounts()))
+                      .replace("{online}", dOnline);
+            reportedLore.set(i, line);
+        }
+        return GUIUtils.createPlayerHead(record.getReportedName(),
+                menuConfig.getName("reported_player").replace("{reported}", record.getReportedName()),
+                reportedLore);
+    }
+
+    private Inventory buildAdminInv(MenuConfig menuConfig, ReportRecord record, String rCount, String rOnline, String dOnline) {
         String title = menuConfig.getTitle().replace("{reported}", record.getReportedName());
         Inventory inv = Bukkit.createInventory(null, menuConfig.getSlot(), title);
         List<String> playerLore = new ArrayList<>(menuConfig.getLore("player"));
@@ -262,39 +372,11 @@ public class GUIManager {
         int closeSlot = getSlot(menuConfig, "close");
         if (closeSlot >= 0) inv.setItem(closeSlot, closeItem);
         // 举报者
-        PlayerInfo reporterInfo = reportManager.getOrCreatePlayerInfo(
-                java.util.UUID.fromString(record.getReporterUuid()), record.getReporterName());
-        List<String> reporterLore = new ArrayList<>(menuConfig.getLore("report_player"));
-        for (int i = 0; i < reporterLore.size(); i++) {
-            String line = reporterLore.get(i);
-            line = line.replace("{player}", record.getReporterName())
-                      .replace("{r_server}", record.getServer())
-                      .replace("{r_reportCount}", reporterInfo != null ? String.valueOf(reporterInfo.getReportCount()) : "0")
-                      .replace("{r_online}", reporterInfo != null ? reporterInfo.getStatusText() : "离线");
-            reporterLore.set(i, line);
-        }
-        ItemStack reporterHead = GUIUtils.createPlayerHead(record.getReporterName(),
-                menuConfig.getName("report_player").replace("{player}", record.getReporterName()),
-                reporterLore);
+        ItemStack reporterHead = buildReporterHead(menuConfig, record, rCount, rOnline);
         int reporterSlot = getSlot(menuConfig, "report_player");
         if (reporterSlot >= 0) inv.setItem(reporterSlot, reporterHead);
         // 被举报者
-        PlayerInfo reportedInfo = reportManager.getOrCreatePlayerInfo(
-                java.util.UUID.fromString(record.getReportedUuid()), record.getReportedName());
-        
-        List<String> reportedLore = new ArrayList<>(menuConfig.getLore("reported_player"));
-        for (int i = 0; i < reportedLore.size(); i++) {
-            String line = reportedLore.get(i);
-            line = line.replace("{server}", record.getServer())
-                      .replace("{reported}", record.getReportedName())
-                      .replace("{reportCount}", String.valueOf(record.getReportCount()))
-                      .replace("{reportCounts}", String.valueOf(record.getReportCounts()))
-                      .replace("{online}", reportedInfo != null ? reportedInfo.getStatusText() : "离线");
-            reportedLore.set(i, line);
-        }
-        ItemStack reportedHead = GUIUtils.createPlayerHead(record.getReportedName(),
-                menuConfig.getName("reported_player").replace("{reported}", record.getReportedName()),
-                reportedLore);
+        ItemStack reportedHead = buildReportedHead(menuConfig, record, dOnline);
         int reportedSlot = getSlot(menuConfig, "reported_player");
         if (reportedSlot >= 0) inv.setItem(reportedSlot, reportedHead);
         // 取消处理
@@ -318,8 +400,7 @@ public class GUIManager {
                     Arrays.asList(GUIUtils.colorize("&9选择处罚" + reason.getName())));
             inv.setItem(slots.get(i), item);
         }
-        reportManager.setSelectedReport(player.getUniqueId(), record);
-        player.openInventory(inv);
+        return inv;
     }
 
     public void openAdminConfirmGUI(Player player, ReportRecord record, String reasonId, String reasonName) {
@@ -332,6 +413,7 @@ public class GUIManager {
         String title = menuConfig.getTitle()
                 .replace("{reported}", record.getReportedName())
                 .replace("{reason}", reasonName);
+        plugin.getDatabaseManager().asyncRun(() -> {
         Inventory inv = Bukkit.createInventory(null, menuConfig.getSlot(), title);
         ItemStack playerHead = GUIUtils.createPlayerHead(record.getReportedName(),
                 menuConfig.getName("player").replace("{reported}", record.getReportedName()),
@@ -355,7 +437,8 @@ public class GUIManager {
                 menuConfig.getData("warning"), menuConfig.getName("warning"), menuConfig.getLore("warning"));
         int warningSlot = getSlot(menuConfig, "warning");
         if (warningSlot >= 0) inv.setItem(warningSlot, warningItem);
-        player.openInventory(inv);
+        openInvSync(player, inv);
+        });
     }
 
     public void openAdminCancelsGUI(Player player, ReportRecord record, List<ReportRecord> otherReports) {
@@ -366,6 +449,7 @@ public class GUIManager {
         }
 
         String title = menuConfig.getTitle().replace("{reported}", record.getReportedName());
+        plugin.getDatabaseManager().asyncRun(() -> {
         Inventory inv = Bukkit.createInventory(null, menuConfig.getSlot(), title);
         ItemStack playerHead = GUIUtils.createPlayerHead(record.getReportedName(),
                 menuConfig.getName("player").replace("{reported}", record.getReportedName()),
@@ -387,7 +471,8 @@ public class GUIManager {
                 menuConfig.getData("warning"), menuConfig.getName("warning"), menuConfig.getLore("warning"));
         int warningSlot = getSlot(menuConfig, "warning");
         if (warningSlot >= 0) inv.setItem(warningSlot, warningItem);
-        player.openInventory(inv);
+        openInvSync(player, inv);
+        });
     }
     
     public void openUnbanPanelGUI(Player player, int page) {
@@ -396,6 +481,7 @@ public class GUIManager {
             player.sendMessage(ChatColor.RED + "配置错误: unbanpanel 菜单未配置");
             return;
         }
+        plugin.getDatabaseManager().asyncRun(() -> {
         String title = menuConfig.getTitle();
         Inventory inv = Bukkit.createInventory(null, menuConfig.getSlot(), title);
         ItemStack mainItem = GUIUtils.createItem(menuConfig.getItem("main"), 1,
@@ -427,7 +513,8 @@ public class GUIManager {
             if (nextSlot >= 0) inv.setItem(nextSlot, nextItem);
         }
         reportManager.setStaffPage(player.getUniqueId(), page);
-        player.openInventory(inv);
+        openInvSync(player, inv);
+        });
     }
 
     private ItemStack createUnbanReportItem(ReportRecord record, MenuConfig menuConfig) {
@@ -464,6 +551,7 @@ public class GUIManager {
             player.sendMessage(ChatColor.RED + "配置错误: unbanadmin 菜单未配置");
             return;
         }
+        plugin.getDatabaseManager().asyncRun(() -> {
         String title = menuConfig.getTitle().replace("{reported}", record.getReportedName());
         Inventory inv = Bukkit.createInventory(null, menuConfig.getSlot(), title);
         List<String> playerLore = new ArrayList<>(menuConfig.getLore("player"));
@@ -513,7 +601,8 @@ public class GUIManager {
                 menuConfig.getData("close"), menuConfig.getName("close"), new ArrayList<>());
         int closeSlot = getSlot(menuConfig, "close");
         if (closeSlot >= 0) inv.setItem(closeSlot, closeItem);
-        player.openInventory(inv);
+        openInvSync(player, inv);
+        });
     }
     
     public void openUnbanConfirmGUI(Player player, ReportRecord record) {
@@ -522,6 +611,7 @@ public class GUIManager {
             player.sendMessage(ChatColor.RED + "配置错误: unban_confirm 菜单未配置");
             return;
         }
+        plugin.getDatabaseManager().asyncRun(() -> {
         String title = menuConfig.getTitle().replace("{reported}", record.getReportedName());
         Inventory inv = Bukkit.createInventory(null, menuConfig.getSlot(), title);
         ItemStack playerHead = GUIUtils.createPlayerHead(record.getReportedName(),
@@ -541,7 +631,8 @@ public class GUIManager {
                 menuConfig.getData("warning"), menuConfig.getName("warning"), menuConfig.getLore("warning"));
         int warningSlot = getSlot(menuConfig, "warning");
         if (warningSlot >= 0) inv.setItem(warningSlot, warningItem);
-        player.openInventory(inv);
+        openInvSync(player, inv);
+        });
     }
     
     public void openFullResetConfirmGUI(Player player) {

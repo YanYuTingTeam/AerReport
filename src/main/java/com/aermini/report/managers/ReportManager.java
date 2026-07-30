@@ -1,23 +1,22 @@
 package com.aermini.report.managers;
 
-import com.aermini.report.managers.ConfigManager.ReasonConfig;
-import com.aermini.report.AerReport;
-import com.aermini.report.database.DatabaseManager;
-import com.aermini.report.models.PlayerInfo;
-import com.aermini.report.models.ReportRecord;
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.entity.Player;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
+
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.entity.Player;
+
+import com.aermini.report.AerReport;
+import com.aermini.report.database.DatabaseManager;
+import com.aermini.report.managers.ConfigManager.ReasonConfig;
+import com.aermini.report.models.PlayerInfo;
+import com.aermini.report.models.ReportRecord;
 
 public class ReportManager {
 
@@ -122,11 +121,27 @@ public class ReportManager {
         }
     }
 
+    // 用子查询一次带出两个计数, 不再每条记录多查2次
+    private String withCountSql(String where) {
+        String t = db.getTablePrefix() + "reports";
+        return "SELECT r.*, " +
+                "(SELECT COUNT(*) FROM " + t + " r2 WHERE r2.reported = r.reported AND r2.report_time <= r.report_time AND r2.status != 'fake') AS beforeCount, " +
+                "(SELECT COUNT(*) FROM " + t + " r3 WHERE r3.reported = r.reported AND r3.status != 'fake') AS allCount " +
+                "FROM " + t + " r " + where;
+    }
+
+    private ReportRecord readRecordWithCount(ResultSet rs) throws SQLException {
+        ReportRecord record = ReportRecord.fromResultSet(rs);
+        record.setReportCount(rs.getInt("beforeCount"));
+        record.setReportCounts(rs.getInt("allCount"));
+        return record;
+    }
+
     public List<ReportRecord> getPendingReports(int page, int pageSize) {
         List<ReportRecord> reports = new ArrayList<>();
         int offset = (page - 1) * pageSize;
-        String sql = "SELECT * FROM " + db.getTablePrefix() + "reports WHERE status IN ('pending', 'processing') " +
-                "ORDER BY report_time ASC LIMIT ? OFFSET ?";
+        String sql = withCountSql("WHERE r.status IN ('pending', 'processing') " +
+                "ORDER BY r.report_time ASC LIMIT ? OFFSET ?");
         
         try (Connection conn = db.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -134,10 +149,7 @@ public class ReportManager {
             stmt.setInt(2, offset);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    ReportRecord record = ReportRecord.fromResultSet(rs);
-                    record.setReportCount(getReportedCountBeforeTime(record.getReportedUuid(), record.getReportTime()));
-                    record.setReportCounts(getTotalReportedCount(record.getReportedUuid()));
-                    reports.add(record);
+                    reports.add(readRecordWithCount(rs));
                 }
             }
         } catch (SQLException e) {
@@ -162,8 +174,8 @@ public class ReportManager {
     public List<ReportRecord> getProcessedReports(int page, int pageSize) {
         List<ReportRecord> reports = new ArrayList<>();
         int offset = (page - 1) * pageSize;
-        String sql = "SELECT * FROM " + db.getTablePrefix() + "reports WHERE status = 'processed' " +
-                "ORDER BY processed_time DESC LIMIT ? OFFSET ?";
+        String sql = withCountSql("WHERE r.status = 'processed' " +
+                "ORDER BY r.processed_time DESC LIMIT ? OFFSET ?");
         
         try (Connection conn = db.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -171,10 +183,7 @@ public class ReportManager {
             stmt.setInt(2, offset);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    ReportRecord record = ReportRecord.fromResultSet(rs);
-                    record.setReportCount(getReportedCountBeforeTime(record.getReportedUuid(), record.getReportTime()));
-                    record.setReportCounts(getTotalReportedCount(record.getReportedUuid()));
-                    reports.add(record);
+                    reports.add(readRecordWithCount(rs));
                 }
             }
         } catch (SQLException e) {
@@ -232,16 +241,13 @@ public class ReportManager {
     }
 
     public ReportRecord getReport(int reportId) {
-        String sql = "SELECT * FROM " + db.getTablePrefix() + "reports WHERE id = ?";
+        String sql = withCountSql("WHERE r.id = ?");
         try (Connection conn = db.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, reportId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    ReportRecord record = ReportRecord.fromResultSet(rs);
-                    record.setReportCount(getReportedCountBeforeTime(record.getReportedUuid(), record.getReportTime()));
-                    record.setReportCounts(getTotalReportedCount(record.getReportedUuid()));
-                    return record;
+                    return readRecordWithCount(rs);
                 }
             }
         } catch (SQLException e) {
@@ -319,21 +325,24 @@ public class ReportManager {
     }
 
     public String getProcessingByName(int reportId) {
-        String processingUuid = getProcessingBy(reportId);
-        if (processingUuid == null) return null;
-        Player player = Bukkit.getPlayer(UUID.fromString(processingUuid));
+        return getStaffNameByUuid(getProcessingBy(reportId));
+    }
+
+    public String getStaffNameByUuid(String staffUuid) {
+        if (staffUuid == null) return null;
+        Player player = Bukkit.getPlayer(UUID.fromString(staffUuid));
         if (player != null) return player.getName();
         String sql = "SELECT name FROM " + db.getTablePrefix() + "players WHERE uuid = ?";
         try (Connection conn = db.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, processingUuid);
+            stmt.setString(1, staffUuid);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) return rs.getString("name");
             }
         } catch (SQLException e) {
             plugin.getLogger().severe("获取处理者名称失败 -> " + e.getMessage());
         }
-        return processingUuid;
+        return staffUuid;
     }
 
     public ReportRecord getProcessingReportRecord(String staffUuid) {
@@ -356,18 +365,14 @@ public class ReportManager {
      * @return 最近的待处理举报记录，如果没有则返回null
      */
     public ReportRecord getPendingReportByReported(String reportedUuid) {
-        String sql = "SELECT * FROM " + db.getTablePrefix() + "reports " +
-                "WHERE reported_uuid = ? AND status IN ('pending', 'processing') " +
-                "ORDER BY report_time DESC LIMIT 1";
+        String sql = withCountSql("WHERE r.reported = ? AND r.status IN ('pending', 'processing') " +
+                "ORDER BY r.report_time DESC LIMIT 1");
         try (Connection conn = db.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, reportedUuid);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    ReportRecord record = ReportRecord.fromResultSet(rs);
-                    record.setReportCount(getReportedCountBeforeTime(record.getReportedUuid(), record.getReportTime()));
-                    record.setReportCounts(getTotalReportedCount(record.getReportedUuid()));
-                    return record;
+                    return readRecordWithCount(rs);
                 }
             }
         } catch (SQLException e) {
@@ -378,13 +383,13 @@ public class ReportManager {
 
     public void processReport(int reportId, String staffUuid, String staffName, String reasonId, String reasonName) {
         long processTime = System.currentTimeMillis();
-        ReportRecord record = getReport(reportId);
-        String banId = record != null ? getLatestBanId(record.getReportedUuid(), processTime) : null; // 取封禁编号
         String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'processed', " +
                 "processed_by = ?, processed_by_name = ?, processed_time = ?, " +
                 "processed_reason_id = ?, processed_reason_name = ?, " +
                 "ban_id = ?, processing_by = NULL WHERE id = ?";
         db.asyncRun(() -> {
+            ReportRecord record = getReport(reportId);
+            String banId = record != null ? getLatestBanId(record.getReportedUuid(), processTime) : null; // 取封禁编号
             try {
                 db.update(sql, staffUuid, staffName, processTime, reasonId, reasonName, banId, reportId);
                 if (record != null) {

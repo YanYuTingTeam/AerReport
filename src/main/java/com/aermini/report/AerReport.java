@@ -1,5 +1,8 @@
 package com.aermini.report;
 
+import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
+
 import com.aermini.report.commands.AerReportCommand;
 import com.aermini.report.commands.ReportCommand;
 import com.aermini.report.commands.VolunCommand;
@@ -9,9 +12,13 @@ import com.aermini.report.database.DatabaseManager;
 import com.aermini.report.gui.GUIManager;
 import com.aermini.report.listeners.ChatListener;
 import com.aermini.report.listeners.GUIListener;
-import com.aermini.report.managers.*;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.plugin.java.JavaPlugin;
+import com.aermini.report.managers.BungeeManager;
+import com.aermini.report.managers.ChatManager;
+import com.aermini.report.managers.ConfigManager;
+import com.aermini.report.managers.PlayerDataManager;
+import com.aermini.report.managers.ReportManager;
+import com.aermini.report.managers.TeleportManager;
+import com.aermini.report.managers.VolunteerManager;
 
 public class AerReport extends JavaPlugin {
     private static AerReport instance;
@@ -77,7 +84,7 @@ public class AerReport extends JavaPlugin {
         }, 72000L, 72000L);
         
         // 提醒待处理举报
-        getServer().getScheduler().runTaskTimer(this, () -> {
+        getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             int pending = reportManager.getPendingReportCount();
             if (pending > 0) {
                 String message = configManager.getMessage("notification")
@@ -89,7 +96,7 @@ public class AerReport extends JavaPlugin {
                 clickableMessage.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
                         net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT, 
                         new net.md_5.bungee.api.chat.TextComponent[]{
-                                new net.md_5.bungee.api.chat.TextComponent("§e点击打开志愿者面板")}));
+                                new net.md_5.bungee.api.chat.TextComponent("§7打开志愿者面板")}));
                 getServer().getOnlinePlayers().stream()
                         .filter(p -> p.hasPermission("aerreport.staff.main"))
                         .forEach(p -> p.spigot().sendMessage(clickableMessage));

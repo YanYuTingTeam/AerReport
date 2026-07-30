@@ -1,15 +1,17 @@
 package com.aermini.report.listeners;
 
-import com.aermini.report.AerReport;
-import net.md_5.bungee.api.chat.ClickEvent;
-import net.md_5.bungee.api.chat.HoverEvent;
-import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+
+import com.aermini.report.AerReport;
+
+import net.md_5.bungee.api.chat.ClickEvent;
+import net.md_5.bungee.api.chat.HoverEvent;
+import net.md_5.bungee.api.chat.TextComponent;
 
 public class ChatListener implements Listener {
     private final AerReport plugin;
@@ -39,16 +41,18 @@ public class ChatListener implements Listener {
         
         if (event.getPlayer().hasPermission("aerreport.staff.main")) {
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                int pending = plugin.getReportManager().getPendingReportCount();
-                if (pending > 0) {
-                    String message = plugin.getConfigManager().getMessage("notification")
-                            .replace("{waiting}", String.valueOf(pending));
-                    TextComponent clickableMessage = new TextComponent(message);
-                    clickableMessage.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/volunteer"));
-                    clickableMessage.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, 
-                            new TextComponent[]{new TextComponent("§7打开志愿者面板")}));
-                    event.getPlayer().spigot().sendMessage(clickableMessage);
-                }
+                plugin.getDatabaseManager().asyncRun(() -> {
+                    int pending = plugin.getReportManager().getPendingReportCount();
+                    if (pending > 0) {
+                        String message = plugin.getConfigManager().getMessage("notification")
+                                .replace("{waiting}", String.valueOf(pending));
+                        TextComponent clickableMessage = new TextComponent(message);
+                        clickableMessage.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/volunteer"));
+                        clickableMessage.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, 
+                                new TextComponent[]{new TextComponent("§7打开志愿者面板")}));
+                        event.getPlayer().spigot().sendMessage(clickableMessage);
+                    }
+                });
                 plugin.getTeleportManager().checkAndProcessTeleportRequest(
                         event.getPlayer().getUniqueId());
                 plugin.getVolunteerManager().checkAndRestoreFromObserverMode(event.getPlayer());
@@ -72,6 +76,7 @@ public class ChatListener implements Listener {
         );
         plugin.getReportManager().cleanupPlayerData(uuid);
         plugin.getGUIManager().removeSelectedPlayer(uuid);
+        plugin.getGUIManager().removePanelCache(uuid);
         // 要考虑到切子服而退出服务器 于是不在此处重置处理中状态
         // cleanupExpiredProcessing负责定期处理. 见 ReportManager.java
     }

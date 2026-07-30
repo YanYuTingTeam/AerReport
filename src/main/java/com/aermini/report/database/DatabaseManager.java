@@ -1,9 +1,5 @@
 package com.aermini.report.database;
 
-import com.aermini.report.AerReport;
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -11,10 +7,16 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.UUID;
 
+import com.aermini.report.AerReport;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
 public class DatabaseManager {
     private final AerReport plugin;
     private HikariDataSource dataSource;
     private String tablePrefix;
+    // 单线程队列, 保证先提交的写入先执行, 后面的读不会拿到旧数据
+    private final java.util.concurrent.ExecutorService dbExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
 
     public DatabaseManager(AerReport plugin) {
         this.plugin = plugin;
@@ -197,6 +199,10 @@ public class DatabaseManager {
     }
 
     public void close() {
+        dbExecutor.shutdown();
+        try {
+            dbExecutor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (InterruptedException ignored) {}
         if (dataSource != null && !dataSource.isClosed()) {
             dataSource.close();
             plugin.getLogger().info("数据库连接池已关闭");
@@ -208,7 +214,17 @@ public class DatabaseManager {
     }
 
     public void asyncRun(Runnable task) {
-        org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
+        try {
+            dbExecutor.submit(() -> {
+                try {
+                    task.run();
+                } catch (Exception e) {
+                    plugin.getLogger().severe("异步数据库任务出错 -> " + e.getMessage());
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException ignored) {
+            // 插件关闭中, 不再接新任务
+        }
     }
 
     public int update(String sql, Object... params) throws SQLException {
