@@ -12,6 +12,7 @@ import com.aermini.report.database.DatabaseManager;
 import com.aermini.report.gui.GUIManager;
 import com.aermini.report.listeners.ChatListener;
 import com.aermini.report.listeners.GUIListener;
+import com.aermini.report.listeners.VexViewKeyListener;
 import com.aermini.report.managers.BungeeManager;
 import com.aermini.report.managers.ChatManager;
 import com.aermini.report.managers.ConfigManager;
@@ -74,6 +75,10 @@ public class AerReport extends JavaPlugin {
     private void registerListeners() {
         getServer().getPluginManager().registerEvents(new GUIListener(this), this);
         getServer().getPluginManager().registerEvents(new ChatListener(this), this);
+        if (getServer().getPluginManager().getPlugin("VexView") != null) {
+            getServer().getPluginManager().registerEvents(new VexViewKeyListener(this), this);
+            getLogger().info("检测到 VexView, 已注册 P 键快捷打开面板");
+        }
     }
 
     private void startTasks() {

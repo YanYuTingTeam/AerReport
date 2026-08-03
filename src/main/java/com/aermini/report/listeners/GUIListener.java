@@ -289,6 +289,7 @@ public class GUIListener implements Listener {
         if (patrolling) {
             if (isClickInSlot(rawSlot, menuConfig, "volun_off")) {
                 plugin.getVolunteerManager().exitPatrol(player);
+                guiManager.openPanelGUI(player, 1);
                 return;
             }
         } else {
@@ -456,6 +457,10 @@ public class GUIListener implements Listener {
     }
 
     private void handleTeleportClick(Player player, ReportRecord record, boolean isReporter, ClickType clickType) {
+        if (!plugin.getVolunteerManager().isPatrolling(player.getUniqueId())) {
+            player.sendMessage(configManager.getMessage("gui.need-patrol"));
+            return;
+        }
         String targetUuid = isReporter ? record.getReporterUuid() : record.getReportedUuid();
         String targetName = isReporter ? record.getReporterName() : record.getReportedName();
         String currentServer = plugin.getServerName();

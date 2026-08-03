@@ -7,9 +7,11 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerToggleFlightEvent;
 
 import com.aermini.report.AerReport;
 
@@ -32,6 +34,15 @@ public class ChatListener implements Listener {
         );
     }
 
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onJoinMessage(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        if (!player.hasPermission("aerreport.staff.main")) return;
+        if (plugin.getDatabaseManager().isVolunteerPatrol(player.getUniqueId())) {
+            event.setJoinMessage(null);
+        }
+    }
+
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
         final Player player = event.getPlayer();
@@ -50,8 +61,10 @@ public class ChatListener implements Listener {
             plugin.getDatabaseManager().asyncRun(() -> {
                 boolean patrol = plugin.getVolunteerManager().syncPatrolFromDb(player);
                 if (patrol) {
-                    Bukkit.getScheduler().runTask(plugin, () ->
-                            plugin.getVolunteerManager().applyPatrol(player));
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        plugin.getVolunteerManager().applyPatrol(player);
+                        plugin.getVolunteerManager().schedulePatrolReapply(player);
+                    });
                 }
             });
 
@@ -78,6 +91,18 @@ public class ChatListener implements Listener {
         }
     }
 
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
+        Player player = event.getPlayer();
+        if (!plugin.getVolunteerManager().isPatrolling(player.getUniqueId())) return;
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (player.isOnline()) {
+                plugin.getVolunteerManager().applyPatrol(player);
+                plugin.getVolunteerManager().schedulePatrolReapply(player);
+            }
+        });
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onGameModeChange(PlayerGameModeChangeEvent event) {
         Player player = event.getPlayer();
@@ -87,13 +112,27 @@ public class ChatListener implements Listener {
         Bukkit.getScheduler().runTask(plugin, () -> player.setGameMode(GameMode.SPECTATOR));
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onToggleFlight(PlayerToggleFlightEvent event) {
+        Player player = event.getPlayer();
+        if (!plugin.getVolunteerManager().isPatrolling(player.getUniqueId())) return;
+        if (!event.isFlying()) {
+            event.setCancelled(true);
+            player.setFlying(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerQuit(PlayerQuitEvent event) {
-        java.util.UUID uuid = event.getPlayer().getUniqueId();
-        plugin.getPlayerDataManager().clearPlayerJoinTime(event.getPlayer().getName());
+        Player player = event.getPlayer();
+        java.util.UUID uuid = player.getUniqueId();
+        if (plugin.getVolunteerManager().isPatrolling(uuid)) {
+            event.setQuitMessage(null);
+        }
+        plugin.getPlayerDataManager().clearPlayerJoinTime(player.getName());
         plugin.getReportManager().updatePlayerInfo(
                 uuid,
-                event.getPlayer().getName(),
+                player.getName(),
                 plugin.getServerName(),
                 false
         );
