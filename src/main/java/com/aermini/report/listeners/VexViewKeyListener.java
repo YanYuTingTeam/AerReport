@@ -22,7 +22,13 @@ public class VexViewKeyListener implements Listener {
         if (event.getEventKeyState()) return;
         if (!MinecraftKeys.KEY_P.isTheKey(event.getKey())) return;
         Player player = event.getPlayer();
-        if (!player.hasPermission("aerreport.staff.main")) return;
-        plugin.getGUIManager().openPanelGUI(player, 1);
+        if (player.hasPermission("aerreport.staff.main")) {
+            plugin.getGUIManager().openPanelGUI(player, 1);
+        } else {
+            String serverName = plugin.getServerName();
+            if (serverName != null && !serverName.toLowerCase().contains("lobby")) {
+                player.sendMessage("你还不是协管");
+            }
+        }
     }
 }
