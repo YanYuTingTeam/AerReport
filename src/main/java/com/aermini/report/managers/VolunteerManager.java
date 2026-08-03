@@ -93,6 +93,8 @@ public class VolunteerManager {
     public void applyPatrol(Player patrolPlayer) {
         if (patrolPlayer == null || !patrolPlayer.isOnline()) return;
         patrolPlayer.setGameMode(GameMode.SPECTATOR);
+        patrolPlayer.setAllowFlight(true);
+        patrolPlayer.setFlying(true);
         for (Player other : Bukkit.getOnlinePlayers()) {
             if (other.getUniqueId().equals(patrolPlayer.getUniqueId())) continue;
             other.hidePlayer(patrolPlayer);
@@ -102,10 +104,22 @@ public class VolunteerManager {
     public void revertPatrol(Player patrolPlayer) {
         if (patrolPlayer == null || !patrolPlayer.isOnline()) return;
         if (patrolPlayer.getGameMode() == GameMode.SPECTATOR) patrolPlayer.setGameMode(GameMode.SURVIVAL);
+        patrolPlayer.setFlying(false);
+        patrolPlayer.setAllowFlight(false);
         for (Player other : Bukkit.getOnlinePlayers()) {
             if (other.getUniqueId().equals(patrolPlayer.getUniqueId())) continue;
             other.showPlayer(patrolPlayer);
         }
+    }
+
+    public void schedulePatrolReapply(Player player) {
+        final UUID uuid = player.getUniqueId();
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline() && patrolSet.contains(uuid)) applyPatrol(player);
+        }, 20L);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline() && patrolSet.contains(uuid)) applyPatrol(player);
+        }, 40L);
     }
 
     public void hidePatrolsFrom(Player joiningPlayer) {

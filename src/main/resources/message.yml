@@ -47,6 +47,7 @@ gui:
   report-already-processed: "&7&l[举报系统]>>> &r&7该举报已被处理或正在处理中"
   unban-success: "&7&l[举报系统]>>> &r&7已解封玩家 &e{reported}"
   change-judgment: "&7&l[举报系统]>>> &r&7已对举报 &e{reportID} &r&7进行改判"
+  need-patrol: "&7&l[举报系统]>>> &r&7&c请先打开协管模式"
 
 admin:
   reload-success: "&7&l[举报系统]>>> &r&7配置已重载"
