@@ -135,4 +135,8 @@ public class AerReport extends JavaPlugin {
     public ChatManager getChatManager() { return chatManager; }
     public PlayerDataManager getPlayerDataManager() { return playerDataManager; }
     public VolunteerManager getVolunteerManager() { return volunteerManager; }
+
+    public boolean isPatrolling(java.util.UUID playerUuid) {
+        return volunteerManager.isPatrolling(playerUuid);
+    }
 }

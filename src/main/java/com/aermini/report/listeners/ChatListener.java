@@ -47,9 +47,15 @@ public class ChatListener implements Listener {
         plugin.getVolunteerManager().hidePatrolsFrom(player);
 
         if (player.hasPermission("aerreport.staff.main")) {
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                applyPatrolIfNeeded(player);
+            plugin.getDatabaseManager().asyncRun(() -> {
+                boolean patrol = plugin.getVolunteerManager().syncPatrolFromDb(player);
+                if (patrol) {
+                    Bukkit.getScheduler().runTask(plugin, () ->
+                            plugin.getVolunteerManager().applyPatrol(player));
+                }
+            });
 
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                 plugin.getDatabaseManager().asyncRun(() -> {
                     int pending = plugin.getReportManager().getPendingReportCount();
                     if (pending > 0) {
@@ -69,13 +75,6 @@ public class ChatListener implements Listener {
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                 plugin.getVolunteerManager().checkAndRestoreFromObserverMode(player);
             }, 40L);
-        }
-    }
-
-    private void applyPatrolIfNeeded(Player player) {
-        boolean patrol = plugin.getVolunteerManager().syncPatrolFromDb(player);
-        if (patrol) {
-            plugin.getVolunteerManager().applyPatrol(player);
         }
     }
 

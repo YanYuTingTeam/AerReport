@@ -66,20 +66,16 @@ public class VolunteerManager {
     public void exitPatrol(Player player) {
         UUID uuid = player.getUniqueId();
         patrolSet.remove(uuid);
-        databaseManager.asyncRun(() -> {
-            databaseManager.setVolunteerPatrol(uuid, false);
-            String returnServer = plugin.getConfigManager().getReturnServer();
+        databaseManager.asyncRun(() -> databaseManager.setVolunteerPatrol(uuid, false));
+        revertPatrol(player);
+        executeExitCommands(player);
+        String returnServer = plugin.getConfigManager().getReturnServer();
+        if (returnServer != null && !returnServer.isEmpty()) {
             Map<String, String> placeholders = new HashMap<>();
             placeholders.put("server", returnServer);
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                revertPatrol(player);
-                executeExitCommands(player);
-                if (returnServer != null && !returnServer.isEmpty()) {
-                    player.sendMessage(plugin.getConfigManager().getMessage("volunteer.exit-success", placeholders));
-                    plugin.getBungeeManager().sendToServer(player, returnServer);
-                }
-            });
-        });
+            player.sendMessage(plugin.getConfigManager().getMessage("volunteer.exit-success", placeholders));
+            plugin.getBungeeManager().sendToServer(player, returnServer);
+        }
     }
 
     public boolean isPatrolling(UUID uuid) {
