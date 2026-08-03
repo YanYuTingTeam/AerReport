@@ -25,6 +25,7 @@ public class ReportManager {
     private final java.util.concurrent.ConcurrentHashMap<UUID, Long> cooldowns;
     private final java.util.concurrent.ConcurrentHashMap<UUID, Integer> playerPages; // vt页码
     private final java.util.concurrent.ConcurrentHashMap<UUID, Integer> staffPages; // vtn页码
+    private final java.util.concurrent.ConcurrentHashMap<UUID, String> staffReportType; // 志愿者当前查看的举报类型 behaviour/chat
     private final java.util.concurrent.ConcurrentHashMap<UUID, ReportRecord> selectedReports; // 选中的举报记录
     // reportID -> staffUUID
     private final java.util.concurrent.ConcurrentHashMap<Integer, String> processingReports = new java.util.concurrent.ConcurrentHashMap<>();
@@ -34,6 +35,7 @@ public class ReportManager {
         this.cooldowns = new java.util.concurrent.ConcurrentHashMap<>();
         this.playerPages = new java.util.concurrent.ConcurrentHashMap<>();
         this.staffPages = new java.util.concurrent.ConcurrentHashMap<>();
+        this.staffReportType = new java.util.concurrent.ConcurrentHashMap<>();
         this.selectedReports = new java.util.concurrent.ConcurrentHashMap<>();
     }
 
@@ -142,7 +144,7 @@ public class ReportManager {
         int offset = (page - 1) * pageSize;
         String sql = withCountSql("WHERE r.status IN ('pending', 'processing') " +
                 "ORDER BY r.report_time ASC LIMIT ? OFFSET ?");
-        
+
         try (Connection conn = db.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, pageSize);
@@ -157,6 +159,92 @@ public class ReportManager {
             e.printStackTrace();
         }
         return reports;
+    }
+
+    // 按 reported+report_type 合并同组 pending/processing 举报, 主记录取组内 MIN(id)
+    public List<ReportRecord> getPendingReportsMerged(int page, int pageSize, String reportType) {
+        List<ReportRecord> reports = new ArrayList<>();
+        int offset = (page - 1) * pageSize;
+        String t = db.getTablePrefix() + "reports";
+        String sql = "SELECT r.*, " +
+                "(SELECT GROUP_CONCAT(DISTINCT r2.reporter_name SEPARATOR ',') FROM " + t + " r2 " +
+                "   WHERE r2.reported = r.reported AND r2.report_type = r.report_type AND r2.status IN ('pending','processing')) AS merged_reporters, " +
+                "(SELECT GROUP_CONCAT(DISTINCT r2.reason_name SEPARATOR ',') FROM " + t + " r2 " +
+                "   WHERE r2.reported = r.reported AND r2.report_type = r.report_type AND r2.status IN ('pending','processing')) AS merged_reasons, " +
+                "(SELECT COUNT(*) FROM " + t + " r3 " +
+                "   WHERE r3.reported = r.reported AND r3.report_type = r.report_type AND r3.status IN ('pending','processing')) AS merged_count, " +
+                "(SELECT GROUP_CONCAT(r4.id SEPARATOR ',') FROM " + t + " r4 " +
+                "   WHERE r4.reported = r.reported AND r4.report_type = r.report_type AND r4.status IN ('pending','processing')) AS merged_ids " +
+                "FROM " + t + " r " +
+                "WHERE r.id IN (SELECT MIN(id) FROM " + t + " WHERE report_type = ? AND status IN ('pending','processing') GROUP BY reported, report_type) " +
+                "ORDER BY r.id ASC LIMIT ? OFFSET ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, reportType);
+            stmt.setInt(2, pageSize);
+            stmt.setInt(3, offset);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    ReportRecord record = ReportRecord.fromResultSet(rs);
+                    record.setMergedReporterNames(rs.getString("merged_reporters"));
+                    record.setMergedReasonNames(rs.getString("merged_reasons"));
+                    record.setMergedCount(rs.getInt("merged_count"));
+                    record.setMergedReportIds(rs.getString("merged_ids"));
+                    reports.add(record);
+                }
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().severe("获取合并举报列表失败 -> " + e.getMessage());
+            e.printStackTrace();
+        }
+        return reports;
+    }
+
+    public int getPendingMergedCount(String reportType) {
+        String t = db.getTablePrefix() + "reports";
+        String sql = "SELECT COUNT(DISTINCT reported) FROM " + t + " WHERE report_type = ? AND status IN ('pending','processing')";
+        try (Connection conn = db.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, reportType);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().severe("获取合并举报数量失败 -> " + e.getMessage());
+        }
+        return 0;
+    }
+
+    // 给单条 record 补充合并组字段, 用于 admin GUI 显示合并信息
+    public void fillMergedInfo(ReportRecord record) {
+        if (record == null || record.getMergedReportIds() != null) return;
+        String t = db.getTablePrefix() + "reports";
+        String sql = "SELECT " +
+                "(SELECT GROUP_CONCAT(DISTINCT r2.reporter_name SEPARATOR ',') FROM " + t + " r2 WHERE r2.reported = ? AND r2.report_type = ? AND r2.status IN ('pending','processing')) AS m_reporters, " +
+                "(SELECT GROUP_CONCAT(DISTINCT r2.reason_name SEPARATOR ',') FROM " + t + " r2 WHERE r2.reported = ? AND r2.report_type = ? AND r2.status IN ('pending','processing')) AS m_reasons, " +
+                "(SELECT COUNT(*) FROM " + t + " r3 WHERE r3.reported = ? AND r3.report_type = ? AND r3.status IN ('pending','processing')) AS m_count, " +
+                "(SELECT GROUP_CONCAT(r4.id SEPARATOR ',') FROM " + t + " r4 WHERE r4.reported = ? AND r4.report_type = ? AND r4.status IN ('pending','processing')) AS m_ids";
+        try (Connection conn = db.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, record.getReportedUuid());
+            stmt.setString(2, record.getReportType());
+            stmt.setString(3, record.getReportedUuid());
+            stmt.setString(4, record.getReportType());
+            stmt.setString(5, record.getReportedUuid());
+            stmt.setString(6, record.getReportType());
+            stmt.setString(7, record.getReportedUuid());
+            stmt.setString(8, record.getReportType());
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    record.setMergedReporterNames(rs.getString("m_reporters"));
+                    record.setMergedReasonNames(rs.getString("m_reasons"));
+                    record.setMergedCount(rs.getInt("m_count"));
+                    record.setMergedReportIds(rs.getString("m_ids"));
+                }
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().severe("填充合并信息失败 -> " + e.getMessage());
+        }
     }
 
     public int getPendingReportCount() {
@@ -393,8 +481,9 @@ public class ReportManager {
             try {
                 db.update(sql, staffUuid, staffName, processTime, reasonId, reasonName, banId, reportId);
                 if (record != null) {
-                    linkOtherReports(record.getReportedUuid(), reportId);
-                    logAction(reportId, staffUuid, staffName, "process", record.getReporterUuid(), 
+                    linkOtherReports(record.getReportedUuid(), record.getReportType(), reportId,
+                            staffUuid, staffName, processTime, reasonId, reasonName, banId);
+                    logAction(reportId, staffUuid, staffName, "process", record.getReporterUuid(),
                             record.getReportedUuid(), reasonId, null);
                 }
             } catch (SQLException e) {
@@ -418,6 +507,7 @@ public class ReportManager {
         try (Connection conn = db.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             long searchTime = processTime - 300000;
+            // Litebans 存带横杠 UUID, AerReport 也存带横杠, 直接匹配
             stmt.setString(1, reportedUuid);
             stmt.setLong(2, searchTime);
             try (ResultSet rs = stmt.executeQuery()) {
@@ -477,16 +567,17 @@ public class ReportManager {
         processingReports.remove(reportId);
     }
 
-    public void batchMarkAsFake(String reportedUuid, int excludeReportId, String staffUuid, String staffName) {
+    // 按 reported+report_type 批量虚假举报, 不影响另一类型
+    public void batchMarkAsFakeByType(String reportedUuid, String reportType, int excludeReportId, String staffUuid, String staffName) {
         long processTime = System.currentTimeMillis();
         String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'fake', " +
-                "processed_by = ?, processed_time = ?, linked_report_id = ?, processing_by = NULL " +
-                "WHERE reported = ? AND status IN ('pending', 'processing') AND id != ?";
+                "processed_by = ?, processed_by_name = ?, processed_time = ?, linked_report_id = ?, processing_by = NULL " +
+                "WHERE reported = ? AND report_type = ? AND status IN ('pending', 'processing') AND id != ?";
         db.asyncRun(() -> {
             try {
-                int count = db.update(sql, staffUuid, processTime, excludeReportId, reportedUuid, excludeReportId);
-                plugin.getLogger().info("批量判定虚假举报: reportedUuid=" + reportedUuid + 
-                        ", excludeReportId=" + excludeReportId + ", 更新了 " + count + " 条记录");
+                int count = db.update(sql, staffUuid, staffName, processTime, excludeReportId, reportedUuid, reportType, excludeReportId);
+                plugin.getLogger().info("批量判定虚假举报(按类型): reportedUuid=" + reportedUuid +
+                        ", reportType=" + reportType + ", 更新了 " + count + " 条记录");
             } catch (SQLException e) {
                 plugin.getLogger().severe("批量判定虚假举报失败 -> " + e.getMessage());
                 e.printStackTrace();
@@ -494,11 +585,16 @@ public class ReportManager {
         });
     }
 
-    private void linkOtherReports(String reportedUuid, int reportId) {
+    private void linkOtherReports(String reportedUuid, String reportType, int reportId,
+                                  String staffUuid, String staffName, long processTime,
+                                  String reasonId, String reasonName, String banId) {
         String sql = "UPDATE " + db.getTablePrefix() + "reports SET linked_report_id = ?, " +
-                "status = 'processed', processing_by = NULL WHERE reported = ? AND status IN ('pending', 'processing') AND id != ?";
+                "status = 'processed', processed_by = ?, processed_by_name = ?, processed_time = ?, " +
+                "processed_reason_id = ?, processed_reason_name = ?, ban_id = ?, processing_by = NULL " +
+                "WHERE reported = ? AND report_type = ? AND status IN ('pending', 'processing') AND id != ?";
         try {
-            db.update(sql, reportId, reportedUuid, reportId);
+            db.update(sql, reportId, staffUuid, staffName, processTime, reasonId, reasonName, banId,
+                    reportedUuid, reportType, reportId);
         } catch (SQLException e) {
             plugin.getLogger().severe("关联其他举报失败 -> " + e.getMessage());
         }
@@ -515,25 +611,6 @@ public class ReportManager {
                 plugin.getLogger().info(player.getName() + " 执行了完全重置操作，清空了 " + finalCount + " 条数据");
             });
         });
-    }
-
-    public List<ReportRecord> getOtherPendingReports(String reportedUuid, int excludeReportId) {
-        List<ReportRecord> reports = new ArrayList<>();
-        String sql = "SELECT * FROM " + db.getTablePrefix() + "reports WHERE reported = ? " +
-                "AND status IN ('pending', 'processing') AND id != ? ORDER BY report_time DESC";
-        try (Connection conn = db.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, reportedUuid);
-            stmt.setInt(2, excludeReportId);
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    reports.add(ReportRecord.fromResultSet(rs));
-                }
-            }
-        } catch (SQLException e) {
-            plugin.getLogger().severe("获取其他举报失败 -> " + e.getMessage());
-        }
-        return reports;
     }
 
     private void logAction(int reportId, String staffUuid, String staffName, String action,
@@ -678,16 +755,19 @@ public class ReportManager {
 
     public int getPlayerPage(UUID uuid) {return playerPages.getOrDefault(uuid, 1);}
     public int getStaffPage(UUID uuid) {return staffPages.getOrDefault(uuid, 1);}
+    public String getStaffReportType(UUID uuid) {return staffReportType.getOrDefault(uuid, "behaviour");}
     public ReportRecord getSelectedReport(UUID uuid) {return selectedReports.get(uuid);}
 
     public void setPlayerPage(UUID uuid, int page) {playerPages.put(uuid, page);}
     public void setStaffPage(UUID uuid, int page) {staffPages.put(uuid, page);}
+    public void setStaffReportType(UUID uuid, String type) {staffReportType.put(uuid, type);}
     public void setSelectedReport(UUID uuid, ReportRecord record) {selectedReports.put(uuid, record);}
     public void removeSelectedReport(UUID uuid) {selectedReports.remove(uuid);}
     public void cleanupPlayerData(UUID uuid) {
         cooldowns.remove(uuid);
         playerPages.remove(uuid);
         staffPages.remove(uuid);
+        staffReportType.remove(uuid);
         selectedReports.remove(uuid);
     }
     
@@ -717,6 +797,7 @@ public class ReportManager {
             cooldowns.clear();
             playerPages.clear();
             staffPages.clear();
+            staffReportType.clear();
             selectedReports.clear();
             processingReports.clear();
         } catch (SQLException e) {

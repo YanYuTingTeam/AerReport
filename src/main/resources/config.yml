@@ -49,20 +49,36 @@ menu:
     title: '举报系统'
     main:
       slot: [0]
-      item: REDSTONE
+      item: APPLE
       name: "&c&l举报处理面板"
       lore:
         - '&c请严格遵守《〈烟雨庭〉志愿者守则》, 合理合规做出正确的判决, 维护烟雨庭的游戏环境与安全！'
+    behaviour:
+      slot: [3]
+      item: DIAMOND_SWORD
+      name: "&5违规行为信息(点击刷新)"
+      lore:
+       - '&f '
+    chat:
+      slot: [4]
+      item: ENCHANTED_BOOK
+      name: "&5违规言论信息(点击刷新)"
+      lore:
+       - '&f '
     prev:
-      slot: [7]
-      item: ARROW
+      slot: [17]
+      item: WOOD_BUTTON
       name: "&f上一页"
     next:
-      slot: [8]
-      item: ARROW
+      slot: [35]
+      item: STONE_BUTTON
       name: "&f下一页"
+    backindex:
+      slot: [26]
+      item: LEVER
+      name: "&f返回首页"
     report:
-      slot: [9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53]
+      slot: [9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,27,28,29,30,31,32,33,34]
       item:
         normal: DIAMOND # 空闲中
         working: REDSTONE # 处理中
@@ -124,7 +140,7 @@ menu:
     title: '处理被封禁玩家 {reported}'
     player:
       slot: [4]
-      item: _PLAYERHEAD
+      item: DIAMOND
       name: "&c举报记录&f{reportID}&c号"
       lore:
         - '&a服务器:&f{server}'
@@ -173,7 +189,7 @@ menu:
     title: '是否确定 解封 {reported}'
     player:
       slot: [4]
-      item: _PLAYERHEAD
+      item: DIAMOND
       name: '&a{reported}'
       lore: 
         - '&6请进行解封操作'
@@ -220,7 +236,7 @@ menu:
     title: '请选择举报理由'
     player:
       slot: [4]
-      item: _PLAYERHEAD
+      item: DIAMOND
       name: '&a{reported}'
       lore: 
         - '&6请选择举报理由'
@@ -232,98 +248,117 @@ menu:
     reasons:
       slot: [10,11,12,13,14,15,16,17,20,21,22,23,24]
   admin:
-    slot: 54
+    slot: 27
     title: '处罚玩家 {reported}'
-    player:
-      slot: [4]
-      item: _PLAYERHEAD
-      name: "&c举报记录&f{reportID}&c号"
-      lore:
-        - '&a服务器:&f{server}'
-        - '&a举报人:&f{player}'
-        - '&a被举报人:&f{reported}'
-        - '&a被举报次数:&f{reportCount}'
-        - '&a理由:&f{reason}'
-        - '&a举报时间:&f{reportTime}'
-        - '&a举报类型:&f{reportType}'
-        - '&a违规言论:&f{reportChat}'
-    close:
+    #player:
+    #  slot: [4]
+    #  item: DIAMOND
+    #  name: "&c举报记录&f{reportID}&c号"
+    #  lore:
+    #    - '&a服务器:&f{server}'
+    #    - '&a举报人:&f{player}'
+    #    - '&a被举报人:&f{reported}'
+    #    - '&a被举报次数:&f{reportCount}'
+    #    - '&a理由:&f{reason}'
+    #    - '&a举报时间:&f{reportTime}'
+    #    - '&a举报类型:&f{reportType}'
+    #    - '&a违规言论:&f{reportChat}'
+    #close:
+    #  slot: [8]
+    #  item: STAINED_GLASS_PANE
+    #  data: 14
+    #  name: '&c关闭'
+    exit:
       slot: [8]
       item: STAINED_GLASS_PANE
       data: 14
-      name: '&c关闭'
-    exit:
-      slot: [31]
-      item: BARRIER
       name: '&f取消处理'
       lore:
         - '&e点击取消处理此举报'
         - '&e不执行任何操作'
-    reasons:
-      slot: [10,11,12,13,14,15,16,17,20,21,22,23,24]
-    report_player:
-      slot: [29]
-      item: _PLAYERHEAD
-      name: '&f举报者: &a&l{player}'
+    teleport:
+      slot: [13]
+      item: NETHER_STAR
+      name: '&b传送至玩家处'
+      lore: 
+        - '&f '
+    ban365:
+      slot: [16]
+      item: MOB_SPAWNER
+      name: '&b封禁玩家365天'
       lore:
-        - '&a举报处于服务器:&f{r_server}'
-        - '&a当前处于服务器:&f{r_server}'
-        - '&a举报次数:&f{r_reportCount}'
-        - '&a状态:&f{r_online}'
-        - ''
-        - '&e左键传送到举报时位置'
-        - '&e右键传送到现在位置'
-    reported_player:
-      slot: [33]
-      item: _PLAYERHEAD
-      name: '&f被举报者: &a&l{reported}'
+      - '&f '
+    ban3650:
+      slot: [10]
+      item: MOB_SPAWNER
+      name: '&b封禁玩家3650天'
       lore:
-        - '&a举报处于服务器:&f{server}'
-        - '&a当前处于服务器:&f{server}'
-        - '&a被举报次数:&f{reportCount}'
-        - '&a被举报总次数:&f{reportCounts}'
-        - '&a状态:&f{online}'
-        - ''
-        - '&e左键传送到举报时位置'
-        - '&e右键传送到现在位置'
+      - '&f '
+    #reasons:
+    #  slot: [10,11,12,13,14,15,16,17,20,21,22,23,24]
+    #report_player:
+    #  slot: [29]
+    #  item: _PLAYERHEAD
+    #  name: '&f举报者: &a&l{player}'
+    #  lore:
+    #    - '&a举报处于服务器:&f{r_server}'
+    #    - '&a当前处于服务器:&f{r_current_server}'
+    #    - '&a举报次数:&f{r_reportCount}'
+    #    - '&a状态:&f{r_online}'
+    #    - ''
+    #    - '&e左键传送到举报时位置'
+    #    - '&e右键传送到现在位置'
+    #reported_player:
+    #  slot: [33]
+    #  item: _PLAYERHEAD
+    #  name: '&f被举报者: &a&l{reported}'
+    #  lore:
+    #    - '&a举报处于服务器:&f{server}'
+    #    - '&a当前处于服务器:&f{current_server}'
+    #    - '&a被举报次数:&f{reportCount}'
+    #    - '&a被举报总次数:&f{reportCounts}'
+    #    - '&a状态:&f{online}'
+    #    - ''
+    #    - '&e左键传送到举报时位置'
+    #    - '&e右键传送到现在位置'
     cancel:
-      slot: [30]
-      item: WOOL
+      slot: [26]
+      item: STAINED_GLASS_PANE
       data: 14
       name: '&f判定为&c&l虚假举报'
-  admin_cancels:
-    slot: 27
-    title: '{reported} 还存在其他被举报, 是否一并判定为&c&l虚假举报'
-    player:
-      slot: [4]
-      item: _PLAYERHEAD
-      name: '&a{reported}'
-      lore: 
-        - '&6请进行处罚操作'
-    confirm:
-      slot: [12]
-      item: WOOL
-      data: 5
-      name: '&a&l确定'
-    cancel:
-      slot: [14]
-      item: WOOL
-      data: 14
-      name: '&c&l取消'
-    warning:
-      slot: [22]
-      item: NETHER_STAR
-      name: '&c&l请注意!'
-      lore: 
-        - '&f志愿者在处理举报时必须严格遵守&e《〈烟雨庭〉志愿者守则》'
-        - '&f任何&e不合规的处罚将可能导致你面临&c撤职&f风险, 请&c&l慎重裁定&r&f!'
-        - '&f你的每一次操作&e&l都会被记录到数据库&r&f!'
+  #admin_cancels:
+  #  slot: 27
+  #  title: '{reported} 还存在其他被举报, 是否一并判定为&c&l虚假举报'
+  #  player:
+  #    slot: [4]
+  #    item: _PLAYERHEAD
+  #    name: '&a{reported}'
+  #    lore: 
+  #      - '&6请进行处罚操作'
+  #  confirm:
+  #    slot: [12]
+  #    item: WOOL
+  #    data: 5
+  #    name: '&a&l确定'
+  #  cancel:
+  #    slot: [14]
+  #    item: WOOL
+  #    data: 14
+  #    name: '&c&l取消'
+  #  warning:
+  #    slot: [22]
+  #    item: NETHER_STAR
+  #    name: '&c&l请注意!'
+  #    lore: 
+  #      - '&f志愿者在处理举报时必须严格遵守&e《〈烟雨庭〉志愿者守则》'
+  #      - '&f任何&e不合规的处罚将可能导致你面临&c撤职&f风险, 请&c&l慎重裁定&r&f!'
+  #      - '&f你的每一次操作&e&l都会被记录到数据库&r&f!'
   admin_confirm:
     slot: 27
-    title: '是否确定 处罚 {reported} 理由 {reason}'
+    title: '是否确定 处罚 {reported}'
     player:
       slot: [4]
-      item: _PLAYERHEAD
+      item: DIAMOND
       name: '&a{reported}'
       lore: 
         - '&6请进行处罚操作'
@@ -353,104 +388,91 @@ reasons:
     item: FEATHER
     data: 0
     punish:
-      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
-      - '[COMMAND] ban {reported} 365d volunteer:behaviour, reason:fly'
+      - '[CONSOLE] ban {reported} 365d volunteer:behaviour, reason:fly'
   killaura:
     type: 'behaviour'
     name: '杀戮光环'
     item: IRON_SWORD
     data: 0
     punish:
-      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
-      - '[COMMAND] ban {reported} 365d volunteer:behaviour, reason:killaura'
+      - '[CONSOLE] ban {reported} 365d volunteer:behaviour, reason:killaura'
   autoclick:
     type: 'behaviour'
     name: '连点'
     item: 143
     data: 0
     punish:
-      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
-      - '[COMMAND] ban {reported} 30d volunteer:behaviour, reason:autoclick'
+      - '[CONSOLE] ban {reported} 30d volunteer:behaviour, reason:autoclick'
   speed:
     type: 'behaviour'
     name: '加速'
     item: IRON_BOOTS
     data: 0
     punish:
-      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
-      - '[COMMAND] ban {reported} 365d volunteer:behaviour, reason:speed'
+      - '[CONSOLE] ban {reported} 365d volunteer:behaviour, reason:speed'
   velocity:
     type: 'behaviour'
     name: '防击退'
     item: IRON_CHESTPLATE
     data: 0
     punish:
-      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
-      - '[COMMAND] ban {reported} 365d volunteer:behaviour, reason:velocity'
+      - '[CONSOLE] ban {reported} 365d volunteer:behaviour, reason:velocity'
   blink:
     type: 'behaviour'
     name: '瞬移'
     item: POTION
     data: 0
     punish:
-      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
-      - '[COMMAND] ban {reported} 365d volunteer:behaviour, reason:blink'
+      - '[CONSOLE] ban {reported} 365d volunteer:behaviour, reason:blink'
   other:
     type: 'behaviour'
     name: '其他行为'
     item: 131
     data: 0
     punish:
-      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
-      - '[COMMAND] ban {reported} 365d volunteer:behaviour, reason:other'
+      - '[CONSOLE] ban {reported} 365d volunteer:behaviour, reason:other'
   teamcrossing:
     type: 'behaviour'
     name: '队伍联合'
     item: 404
     data: 0
     punish:
-      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
-      - '[COMMAND] ban {reported} 30d volunteer:behaviour, reason:teamcrossing'
+      - '[CONSOLE] ban {reported} 30d volunteer:behaviour, reason:teamcrossing'
   ad:
     type: 'chat'
     name: '广告'
     item: 323
     data: 0
     punish:
-      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
-      - '[COMMAND] ban {reported} 365d volunteer:chat, reason:ad'
+      - '[CONSOLE] ban {reported} 365d volunteer:chat, reason:ad'
   obscene:
     type: 'chat'
     name: '不雅言论'
     item: 340
     data: 0
     punish:
-      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
-      - '[COMMAND] ban {reported} 3650d volunteer:chat, reason:obscene'
+      - '[CONSOLE] ban {reported} 3650d volunteer:chat, reason:obscene'
   fraud:
     type: 'chat'
     name: '诈骗'
     item: ARROW
     data: 0
     punish:
-      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
-      - '[COMMAND] ban {reported} 3650d volunteer:chat, reason:fraud'
+      - '[CONSOLE] ban {reported} 3650d volunteer:chat, reason:fraud'
   porn:
     type: 'chat'
     name: '黄色'
     item: WOOL
     data: 4
     punish:
-      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
-      - '[COMMAND] ban {reported} 3650d volunteer:chat, reason:porn'
+      - '[CONSOLE] ban {reported} 3650d volunteer:chat, reason:porn'
   chatother:
     type: 'chat'
     name: '其他言论违规'
     item: 387
     data: 0
     punish:
-      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
-      - '[COMMAND] ban {reported} 3650d volunteer:chat, reason:chatother'
+      - '[CONSOLE] ban {reported} 3650d volunteer:chat, reason:chatother'
 
 spec:
   - '[COMMAND] gamemode spectator'

@@ -37,6 +37,11 @@ public class ReportRecord {
     private Integer linkedReportId;
     private int reportCount; // 此前被举报次数
     private int reportCounts; // 总
+    // 合并组字段: 同 reported+report_type 的 pending/processing 合并展示时填充
+    private String mergedReporterNames;
+    private String mergedReasonNames;
+    private int mergedCount;
+    private String mergedReportIds;
 
     public ReportRecord() {}
     public static ReportRecord fromResultSet(ResultSet rs) throws SQLException {
@@ -179,6 +184,10 @@ public class ReportRecord {
     public Integer getLinkedReportId() {return linkedReportId;}
     public int getReportCount() {return reportCount;}
     public int getReportCounts() {return reportCounts;}
+    public String getMergedReporterNames() {return mergedReporterNames;}
+    public String getMergedReasonNames() {return mergedReasonNames;}
+    public int getMergedCount() {return mergedCount;}
+    public String getMergedReportIds() {return mergedReportIds;}
 
     // 还要开记事本的救赎感
     public void setId(int id) {this.id=id;}
@@ -212,4 +221,8 @@ public class ReportRecord {
     public void setLinkedReportId(Integer linkedReportId) {this.linkedReportId=linkedReportId;}
     public void setReportCount(int reportCount) {this.reportCount=reportCount;}
     public void setReportCounts(int reportCounts) {this.reportCounts=reportCounts;}
+    public void setMergedReporterNames(String v) {this.mergedReporterNames=v;}
+    public void setMergedReasonNames(String v) {this.mergedReasonNames=v;}
+    public void setMergedCount(int v) {this.mergedCount=v;}
+    public void setMergedReportIds(String v) {this.mergedReportIds=v;}
 }

@@ -254,6 +254,7 @@ public class ConfigManager {
 
         public String getItem(String itemName) {
             Object itemObj = section.get(itemName + ".item");
+            if (itemObj == null) return null;
             if (itemObj instanceof String) {
                 return (String) itemObj;
             } else if (itemObj instanceof ConfigurationSection) {
@@ -264,8 +265,9 @@ public class ConfigManager {
 
         public String getItem(String itemName, String state) {
             Object itemObj = section.get(itemName + ".item");
+            if (itemObj == null) return null;
             if (itemObj instanceof ConfigurationSection) {
-                return section.getString(itemName + ".item." + state, 
+                return section.getString(itemName + ".item." + state,
                         section.getString(itemName + ".item.normal", "DIAMOND"));
             }
             return section.getString(itemName + ".item", "STONE");

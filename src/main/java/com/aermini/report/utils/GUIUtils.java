@@ -10,6 +10,7 @@ import java.util.List;
 
 public class GUIUtils {
     public static ItemStack createItem(String materialName, int amount, int data, String name, List<String> lore) {
+        if (materialName == null) return null;
         Material material = parseMaterial(materialName);
         ItemStack item;
         if (material == null) material=Material.STONE;

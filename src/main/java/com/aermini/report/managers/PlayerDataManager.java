@@ -11,6 +11,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,7 +22,7 @@ import java.util.function.Consumer;
 public class PlayerDataManager {
     private final AerReport plugin;
     private Map<String, Long> playerJoinTimes = new ConcurrentHashMap<>();
-    private Map<UUID, Consumer<String>> serverCallbacks = new ConcurrentHashMap<>();
+    private Map<UUID, List<Consumer<String>>> serverCallbacks = new ConcurrentHashMap<>();
 
     public PlayerDataManager(AerReport plugin) {
         this.plugin = plugin;
@@ -54,9 +57,11 @@ public class PlayerDataManager {
                             JsonObject server = resp.getAsJsonObject("server");
                             String serverName = server.has("name") && !server.get("name").isJsonNull()
                                     ? server.get("name").getAsString() : null;
-                            Consumer<String> callback = serverCallbacks.remove(uuid);
-                            if (callback != null) {
-                                callback.accept(serverName);
+                            List<Consumer<String>> callbacks = serverCallbacks.remove(uuid);
+                            if (callbacks != null) {
+                                synchronized (callbacks) {
+                                    for (Consumer<String> cb : callbacks) cb.accept(serverName);
+                                }
                             }
                         }
                     } catch (Exception e) {
@@ -66,7 +71,14 @@ public class PlayerDataManager {
     }
 
     public void getPlayerServer(UUID playerUuid, Consumer<String> callback) {
-        serverCallbacks.put(playerUuid, callback);
+        List<Consumer<String>> callbacks = serverCallbacks.computeIfAbsent(playerUuid,
+                k -> Collections.synchronizedList(new ArrayList<>()));
+        boolean needSend;
+        synchronized (callbacks) {
+            needSend = callbacks.isEmpty();
+            callbacks.add(callback);
+        }
+        if (!needSend) return;
         try {
             ByteArrayOutputStream b = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(b);
@@ -80,21 +92,21 @@ public class PlayerDataManager {
                 Player sender = Bukkit.getOnlinePlayers().iterator().next();
                 sender.sendPluginMessage(plugin, "aermonitor:main", b.toByteArray());
             } else {
-                serverCallbacks.remove(playerUuid);
-                callback.accept(null);
+                List<Consumer<String>> cbs = serverCallbacks.remove(playerUuid);
+                if (cbs != null) synchronized (cbs) { for (Consumer<String> cb : cbs) cb.accept(null); }
                 return;
             }
         } catch (IOException e) {
             plugin.getLogger().severe("发送aermonitor:main查询失败 -> " + e.getMessage());
-            serverCallbacks.remove(playerUuid);
-            callback.accept(null);
+            List<Consumer<String>> cbs = serverCallbacks.remove(playerUuid);
+            if (cbs != null) synchronized (cbs) { for (Consumer<String> cb : cbs) cb.accept(null); }
             return;
         }
-        // timeout 200ticks(10s)
+        // timeout 40ticks(2s)
         Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-            Consumer<String> cb = serverCallbacks.remove(playerUuid);
-            if (cb != null) cb.accept(null);
-        }, 200L);
+            List<Consumer<String>> cbs = serverCallbacks.remove(playerUuid);
+            if (cbs != null) synchronized (cbs) { for (Consumer<String> cb : cbs) cb.accept(null); }
+        }, 40L);
     }
 
     public void notifyStaff(String permission, String message) {

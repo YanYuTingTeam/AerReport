@@ -70,7 +70,6 @@ public class GUIListener implements Listener {
         if (title.equals("选择玩家处罚")) return true;
         if (title.startsWith("处罚玩家 ")) return true;
         if (title.startsWith("是否确定 处罚 ")) return true;
-        if (title.contains("还存在其他被举报")) return true;
         MenuConfig unbanPanelConfig = configManager.getMenuConfig("unbanpanel");
         if (unbanPanelConfig != null && title.equals(unbanPanelConfig.getTitle())) return true;
         if (title.startsWith("处理被封禁玩家 ")) return true;
@@ -119,10 +118,6 @@ public class GUIListener implements Listener {
         }
         if (title.startsWith("是否确定 处罚 ")) {
             handleAdminConfirmClick(player, item, event.getRawSlot());
-            return;
-        }
-        if (title.contains("还存在其他被举报")) {
-            handleAdminCancelsClick(player, item, event.getRawSlot());
             return;
         }
         MenuConfig unbanPanelConfig = configManager.getMenuConfig("unbanpanel");
@@ -286,6 +281,20 @@ public class GUIListener implements Listener {
 
     private void handlePanelClick(Player player, ItemStack item, ClickType clickType, int rawSlot) {
         MenuConfig menuConfig = configManager.getMenuConfig("panel");
+        // behaviour/chat 类型切换
+        if (isClickInSlot(rawSlot, menuConfig, "behaviour")) {
+            guiManager.openPanelGUI(player, 1, "behaviour");
+            return;
+        }
+        if (isClickInSlot(rawSlot, menuConfig, "chat")) {
+            guiManager.openPanelGUI(player, 1, "chat");
+            return;
+        }
+        // backindex 快速返回首页(当前类型)
+        if (isClickInSlot(rawSlot, menuConfig, "backindex")) {
+            guiManager.openPanelGUI(player, 1);
+            return;
+        }
         if (isClickInSlot(rawSlot, menuConfig, "prev")) {
             int page = reportManager.getStaffPage(player.getUniqueId());
             if (page > 1) guiManager.openPanelGUI(player, page - 1);
@@ -331,20 +340,20 @@ public class GUIListener implements Listener {
                 plugin.getDatabaseManager().asyncRun(() -> {
                     try {
                         ReportRecord record = reportManager.getReport(reportId);
-                        if (record != null) {
-                            if (reportManager.isBeingProcessedByOther(reportId, player.getUniqueId().toString())) {
-                                String processingBy = reportManager.getProcessingByName(reportId);
-                                Map<String, String> placeholders = new HashMap<>();
-                                placeholders.put("staff", processingBy);
-                                player.sendMessage(configManager.getMessage("gui.processing-by-other", placeholders));
-                                return;
-                            }
-                            if (reportManager.startProcessing(reportId, player.getUniqueId().toString(), player.getName())) {
-                                guiManager.openAdminGUI(player, record);
-                            } else {
-                                player.sendMessage(configManager.getMessage("gui.process-fail"));
-                            }
+                        if (record == null) return;
+                        if (reportManager.isBeingProcessedByOther(reportId, player.getUniqueId().toString())) {
+                            String processingBy = reportManager.getProcessingByName(reportId);
+                            Map<String, String> placeholders = new HashMap<>();
+                            placeholders.put("staff", processingBy);
+                            player.sendMessage(configManager.getMessage("gui.processing-by-other", placeholders));
+                            return;
                         }
+                        if (!reportManager.startProcessing(reportId, player.getUniqueId().toString(), player.getName())) {
+                            player.sendMessage(configManager.getMessage("gui.process-fail"));
+                            return;
+                        }
+                        // 改用 openAdminGUINow 同步开 UI, 不再走 openAdminGUI 异步链路, 消除点击延迟
+                        Bukkit.getScheduler().runTask(plugin, () -> guiManager.openAdminGUINow(player, record));
                     } finally {
                         guiManager.finishOpening(player.getUniqueId());
                     }
@@ -376,21 +385,39 @@ public class GUIListener implements Listener {
             return;
         }
         if (isClickInSlot(slot, menuConfig, "cancel")) {
+            // 合并举报后, 直接把当前合并组(同 reported+type)判定为虚假举报
             plugin.getDatabaseManager().asyncRun(() -> {
-                List<ReportRecord> otherReports = reportManager.getOtherPendingReports(
-                        record.getReportedUuid(), record.getId());
-                if (!otherReports.isEmpty()) {
-                    guiManager.openAdminCancelsGUI(player, record, otherReports);
-                } else {
-                    reportManager.markAsFake(record.getId(), 
-                            player.getUniqueId().toString(), 
-                            player.getName());
-                    player.sendMessage(configManager.getMessage("gui.fake-report-single"));
-                    Bukkit.getScheduler().runTask(plugin, player::closeInventory);
-                }
+                reportManager.markAsFake(record.getId(),
+                        player.getUniqueId().toString(),
+                        player.getName());
+                reportManager.batchMarkAsFakeByType(record.getReportedUuid(),
+                        record.getReportType(), record.getId(),
+                        player.getUniqueId().toString(), player.getName());
+                player.sendMessage(configManager.getMessage("gui.fake-report-batch"));
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    plugin.getVolunteerManager().restoreAfterProcess(player);
+                    player.closeInventory();
+                });
             });
             return;
         }
+        // teleport: 传送到被举报者实时位置(复用右键传送逻辑)
+        if (isClickInSlot(slot, menuConfig, "teleport")) {
+            handleTeleportClick(player, record, false, ClickType.RIGHT);
+            return;
+        }
+        // ban365/ban3650: 弹出 admin_confirm 确认面板
+        if (isClickInSlot(slot, menuConfig, "ban365")) {
+            selectedReasons.put(player.getUniqueId(), "ban365");
+            guiManager.openAdminConfirmGUI(player, record, "ban365", "封禁365天");
+            return;
+        }
+        if (isClickInSlot(slot, menuConfig, "ban3650")) {
+            selectedReasons.put(player.getUniqueId(), "ban3650");
+            guiManager.openAdminConfirmGUI(player, record, "ban3650", "封禁3650天");
+            return;
+        }
+        // report_player/reported_player 头颅左/右键传送, 注释配置后 slot=-1 自动不进
         if (isClickInSlot(slot, menuConfig, "report_player")) {
             handleTeleportClick(player, record, true, clickType);
             return;
@@ -473,35 +500,47 @@ public class GUIListener implements Listener {
                 player.sendMessage(configManager.getMessage("teleport.to-player-current", placeholders));
                 return;
             }
+            // 优先用缓存子服(打开 admin GUI 时已预查), 省掉 getPlayerServer 的 2s 等待
+            String cachedServer = guiManager.getCachedPlayerServer(targetUuid);
+            if (cachedServer != null) {
+                handleCrossServerTeleport(player, targetUuid, targetName, cachedServer, placeholders);
+                return;
+            }
+            // 缓存未命中, 走 AerServerMonitor 查询
             plugin.getPlayerDataManager().getPlayerServer(java.util.UUID.fromString(targetUuid), server -> {
                 if (server == null) {
                     player.sendMessage(configManager.getMessage("teleport.player-not-found"));
                     return;
                 }
-                if (server.equals(plugin.getServerName())) {
-                    Player targetNow = Bukkit.getPlayerExact(targetName);
-                    if (targetNow != null && targetNow.isOnline()) {
-                        plugin.getTeleportManager().saveAndSetSpectatorMode(player);
-                        player.teleport(targetNow.getLocation());
-                        player.sendMessage(configManager.getMessage("teleport.to-player-current", placeholders));
-                        return;
-                    }
-                }
-                plugin.getTeleportManager().createTeleportRequest(
-                        player.getUniqueId().toString(),
-                        targetUuid,
-                        targetName,
-                        server,
-                        0, 0, 0, "world",
-                        "current",
-                        false
-                );
-                plugin.getBungeeManager().sendServerInvite(player.getUniqueId(), UUID.fromString(targetUuid), server);
-                plugin.getBungeeManager().sendToServer(player, server);
-                placeholders.put("server", server);
-                player.sendMessage(configManager.getMessage("teleport.to-player-cross-server", placeholders));
+                handleCrossServerTeleport(player, targetUuid, targetName, server, placeholders);
             });
         }
+    }
+
+    private void handleCrossServerTeleport(Player player, String targetUuid, String targetName,
+                                            String server, Map<String, String> placeholders) {
+        if (server.equals(plugin.getServerName())) {
+            Player targetNow = Bukkit.getPlayerExact(targetName);
+            if (targetNow != null && targetNow.isOnline()) {
+                plugin.getTeleportManager().saveAndSetSpectatorMode(player);
+                player.teleport(targetNow.getLocation());
+                player.sendMessage(configManager.getMessage("teleport.to-player-current", placeholders));
+                return;
+            }
+        }
+        plugin.getTeleportManager().createTeleportRequest(
+                player.getUniqueId().toString(),
+                targetUuid,
+                targetName,
+                server,
+                0, 0, 0, "world",
+                "current",
+                false
+        );
+        plugin.getBungeeManager().sendServerInvite(player.getUniqueId(), UUID.fromString(targetUuid), server);
+        plugin.getBungeeManager().sendToServer(player, server);
+        placeholders.put("server", server);
+        player.sendMessage(configManager.getMessage("teleport.to-player-cross-server", placeholders));
     }
 
     private void handleAdminConfirmClick(Player player, ItemStack item, int slot) {
@@ -512,71 +551,43 @@ public class GUIListener implements Listener {
             player.closeInventory();
             return;
         }
-        ReasonConfig reason = configManager.getReason(reasonId);
-        if (reason == null) {
-            player.sendMessage(configManager.getMessage("gui.reason-config-error"));
-            player.closeInventory();
-            return;
+        // ban365/ban3650 走特殊封禁命令, 不走 reasons 配置
+        boolean isBan365 = "ban365".equals(reasonId);
+        boolean isBan3650 = "ban3650".equals(reasonId);
+        String reasonName;
+        if (isBan365) reasonName = "封禁365天";
+        else if (isBan3650) reasonName = "封禁3650天";
+        else {
+            ReasonConfig reason = configManager.getReason(reasonId);
+            if (reason == null) {
+                player.sendMessage(configManager.getMessage("gui.reason-config-error"));
+                player.closeInventory();
+                return;
+            }
+            reasonName = reason.getName();
         }
         if (isClickInSlot(slot, menuConfig, "cancel")) {
             guiManager.openAdminGUI(player, record);
             return;
         }
         if (isClickInSlot(slot, menuConfig, "confirm")) {
-            executePunish(record.getReportedName(), reason);
-            reportManager.processReport(record.getId(), 
-                    player.getUniqueId().toString(), 
-                    player.getName(), 
+            if (isBan365) {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "ban " + record.getReportedName() + " 365d volunteer:behaviour");
+            } else if (isBan3650) {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "ban " + record.getReportedName() + " 3650d volunteer:behaviour");
+            } else {
+                ReasonConfig reason = configManager.getReason(reasonId);
+                executePunish(record.getReportedName(), reason);
+            }
+            reportManager.processReport(record.getId(),
+                    player.getUniqueId().toString(),
+                    player.getName(),
                     reasonId,
-                    reason.getName());
+                    reasonName);
             Map<String, String> placeholders = new HashMap<>();
             placeholders.put("reportID", String.valueOf(record.getId()));
-            placeholders.put("realReason", reason.getName());
+            placeholders.put("realReason", reasonName);
             player.sendMessage(configManager.getMessage("process", placeholders));
-            plugin.getVolunteerManager().restoreAfterProcess(player);
-            plugin.getDatabaseManager().asyncRun(() -> {
-                int remaining = reportManager.getPendingReportCount();
-                if (remaining > 0) {
-                    guiManager.openPanelGUI(player, 1);
-                } else {
-                    Bukkit.getScheduler().runTask(plugin, player::closeInventory);
-                }
-            });
-        }
-    }
-
-    private void handleAdminCancelsClick(Player player, ItemStack item, int slot) {
-        MenuConfig menuConfig = configManager.getMenuConfig("admin_cancels");
-        ReportRecord record = reportManager.getSelectedReport(player.getUniqueId());
-        if (record == null) {
-            player.closeInventory();
-            return;
-        }
-        if (isClickInSlot(slot, menuConfig, "cancel")) {
-            reportManager.markAsFake(record.getId(), 
-                    player.getUniqueId().toString(), 
-                    player.getName());
-            player.sendMessage(configManager.getMessage("gui.fake-report-single"));
-            plugin.getVolunteerManager().restoreAfterProcess(player);
-            plugin.getDatabaseManager().asyncRun(() -> {
-                int remaining = reportManager.getPendingReportCount();
-                if (remaining > 0) {
-                    guiManager.openPanelGUI(player, 1);
-                } else {
-                    Bukkit.getScheduler().runTask(plugin, player::closeInventory);
-                }
-            });
-            return;
-        }
-        if (isClickInSlot(slot, menuConfig, "confirm")) {
-            reportManager.markAsFake(record.getId(), 
-                    player.getUniqueId().toString(), 
-                    player.getName());
-            reportManager.batchMarkAsFake(record.getReportedUuid(), 
-                    record.getId(), 
-                    player.getUniqueId().toString(), 
-                    player.getName());
-            player.sendMessage(configManager.getMessage("gui.fake-report-batch"));
             plugin.getVolunteerManager().restoreAfterProcess(player);
             plugin.getDatabaseManager().asyncRun(() -> {
                 int remaining = reportManager.getPendingReportCount();
@@ -637,10 +648,10 @@ public class GUIListener implements Listener {
         placeholders.put("server", server);
         String message = configManager.getMessage("alert", placeholders);
         TextComponent clickableMessage = new TextComponent(message);
-        clickableMessage.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, 
-                "/volunteer open " + reportId));
-        clickableMessage.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, 
-                new TextComponent[]{new TextComponent("§7点击处理第§f§l"+reportId+"§r§7号举报")}));
+        clickableMessage.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,
+                "/volunteer"));
+        clickableMessage.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                new TextComponent[]{new TextComponent("§7点击打开举报处理面板")}));
         long notifyThreshold = configManager.getConfig().getLong("settings.notify-threshold", 1000);
         for (Player p : Bukkit.getOnlinePlayers()) {
             if (p.hasPermission("aerreport.staff.alert")) {

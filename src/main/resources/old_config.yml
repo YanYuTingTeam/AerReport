@@ -1,0 +1,457 @@
+config:
+  cooldown: 3000 # 使用/report的冷却, 单位毫秒
+  # 志愿者跨服传送后执行的命令（以志愿者身份执行）
+  # {player} 会被替换为志愿者名, {tplayer} 会被替换为目标玩家名
+  # 注意：gamemode spectator 已内置到代码中，无需在此配置
+  teleport_commands:
+    - '[COMMAND] matrix spectate {tplayer}'
+
+settings:
+  # 通知时间差阈值（毫秒）
+  # 当志愿者切换服务器时，如果通知时间与加入时间的差值小于此阈值，则发送通知
+  # 用于防止志愿者切换服务器时收到重复通知
+  notify-threshold: 1000
+  
+  # 同一玩家对另一玩家的最大重复举报次数（在被处理前）
+  # 设置为0表示不限制
+  max-repeat: 3
+  
+  # 志愿者退出观察模式时可返回的服务器白名单
+  # /volunteer leave 命令会返回到白名单中的服务器
+  return-server-whitelist:
+    - lobby
+    - bwlobby
+    - swlobby
+    - afklobby
+    - race
+  
+  # 志愿者退出观察者模式时执行的命令
+  # {player} 会被替换为玩家名
+  # [CONSOLE] 控制台执行
+  # [COMMAND] 玩家执行（临时op权限）
+  # [CMD] 玩家普通执行
+  exit-observer-commands:
+    - '[CONSOLE] gamemode survival {player}'
+
+database:
+  address: 127.0.0.1
+  port: 3306
+  username: YanYuTing_java
+  password: "_YANYUTING@2025@AerMini"
+  database: yanyuting_java
+  table_prefix: aerreport_
+  version: auto # auto (5.x/8.x), 5 (5.x), 8 (8.x)
+  litebans_database: ""
+
+menu:
+  panel:
+    slot: 54
+    title: '举报系统'
+    main:
+      slot: [0]
+      item: APPLE
+      name: "&c&l举报处理面板"
+      lore:
+        - '&c请严格遵守《〈烟雨庭〉志愿者守则》, 合理合规做出正确的判决, 维护烟雨庭的游戏环境与安全！'
+    prev:
+      slot: [7]
+      item: ARROW
+      name: "&f上一页"
+    next:
+      slot: [8]
+      item: ARROW
+      name: "&f下一页"
+    report:
+      slot: [9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53]
+      item:
+        normal: DIAMOND # 空闲中
+        working: REDSTONE # 处理中
+      name: "&c举报记录&f{reportID}&c号"
+      lore:
+        - '&a服务器:&f{server}'
+        - '&a举报人:&f{player}'
+        - '&a被举报人:&f{reported}'
+        - '&a被举报次数:&f{reportCount}'
+        - '&a理由:&f{reason}'
+        - '&a举报时间:&f{reportTime}'
+        - '&a举报类型:&f{reportType}'
+        - '&a违规言论:&f{reportChat}'
+  unbanpanel:
+    slot: 54
+    title: '举报系统'
+    main:
+      slot: [0]
+      item: REDSTONE
+      name: "&c&l封禁处理面板"
+      lore:
+        - '&c请严格遵守《〈烟雨庭〉志愿者守则》, 合理合规做出正确的判决, 维护烟雨庭的游戏环境与安全！'
+    prev:
+      slot: [7]
+      item: ARROW
+      name: "&f上一页"
+    next:
+      slot: [8]
+      item: ARROW
+      name: "&f下一页"
+    report:
+      slot: [9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53]
+      item:
+        banned: 351
+        working: REDSTONE
+        unbanned: 351
+      data:
+        banned: 1
+        working: 0
+        unbanned: 10
+      name: "&c举报记录&f{reportID}&c号"
+      lore:
+        - '&a服务器:&f{server}'
+        - '&a举报人:&f{player}'
+        - '&a被举报人:&f{reported}'
+        - '&a被举报次数:&f{reportCount}'
+        - '&a理由:&f{reason}'
+        - '&a举报时间:&f{reportTime}'
+        - '&a举报类型:&f{reportType}'
+        - '&a违规言论:&f{reportChat}'
+        - ''
+        - '&a处罚理由:&f{reportedReason}'
+        - '&a处罚类型:&f{reportedType}'
+        - '&a处罚时间:&f{reportedTime}'
+        - '&a封禁编号:&f{banId}'
+        - '&a处罚志愿者:&f{operater}'
+  unbanadmin:
+    slot: 27
+    title: '处理被封禁玩家 {reported}'
+    player:
+      slot: [4]
+      item: _PLAYERHEAD
+      name: "&c举报记录&f{reportID}&c号"
+      lore:
+        - '&a服务器:&f{server}'
+        - '&a举报人:&f{player}'
+        - '&a被举报人:&f{reported}'
+        - '&a被举报次数:&f{reportCount}'
+        - '&a理由:&f{reason}'
+        - '&a举报时间:&f{reportTime}'
+        - '&a举报类型:&f{reportType}'
+        - '&a违规言论:&f{reportChat}'
+        - ''
+        - '&a处罚理由:&f{reportedReason}'
+        - '&a处罚类型:&f{reportedType}'
+        - '&a处罚时间:&f{reportedTime}'
+        - '&a封禁编号:&f{banId}'
+        - '&a处罚志愿者:&f{operater}'
+    close:
+      slot: [8]
+      item: STAINED_GLASS_PANE
+      data: 14
+      name: '&c关闭'
+    changeReason:
+      slot: [11]
+      item: 340
+      name: '&c&l改判'
+      lore:
+        - '&e点击重新处理此举报'
+        - '&c慎重考虑您的行为, 务必严格遵守《〈烟雨庭〉志愿者守则》, 做出公平公正的裁决!'
+    unban:
+      slot: [13]
+      item: 341
+      name: '&a&l解封'
+      lore:
+        - '&e点击解封&6{reported}'
+        - '&c慎重考虑您的行为, 务必严格遵守《〈烟雨庭〉志愿者守则》, 做出公平公正的裁决!'
+        - '&c你将承担&l违规操作造成的后果!'
+    exit:
+      slot: [15]
+      item: BARRIER
+      name: '&f取消处理'
+      lore:
+        - '&e点击取消处理此举报'
+        - '&e不执行任何操作'
+  unban_confirm:
+    slot: 27
+    title: '是否确定 解封 {reported}'
+    player:
+      slot: [4]
+      item: _PLAYERHEAD
+      name: '&a{reported}'
+      lore: 
+        - '&6请进行解封操作'
+    confirm:
+      slot: [12]
+      item: WOOL
+      data: 5
+      name: '&a&l确定'
+    cancel:
+      slot: [14]
+      item: WOOL
+      data: 14
+      name: '&c&l取消'
+    warning:
+      slot: [22]
+      item: NETHER_STAR
+      name: '&c&l请注意!'
+      lore: 
+        - '&f志愿者在处理举报时必须严格遵守&e《〈烟雨庭〉志愿者守则》'
+        - '&f任何&e不合规的处罚将可能导致你面临&c撤职&f风险, 请&c&l慎重裁定&r&f!'
+        - '&f你的每一次操作&e&l都会被记录到数据库&r&f!'
+  reports:
+    slot: 54
+    title: '举报系统-请选择你要举报的玩家'
+    prev:
+      slot: [45]
+      item: ARROW
+      name: '&f上一页'
+    next:
+      slot: [53]
+      item: ARROW
+      name: '&f下一页'
+    close:
+      slot: [49]
+      item: BARRIER
+      name: '&c关闭'
+    player:
+      slot: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44]
+      item: _PLAYERHEAD
+      name: '&a{players}'
+      lore: '&6点击举报该玩家'
+  report:
+    slot: 27
+    title: '请选择举报理由'
+    player:
+      slot: [4]
+      item: _PLAYERHEAD
+      name: '&a{reported}'
+      lore: 
+        - '&6请选择举报理由'
+    close:
+      slot: [8]
+      item: STAINED_GLASS_PANE
+      data: 14
+      name: '&c关闭'
+    reasons:
+      slot: [10,11,12,13,14,15,16,17,20,21,22,23,24]
+  admin:
+    slot: 54
+    title: '处罚玩家 {reported}'
+    player:
+      slot: [4]
+      item: _PLAYERHEAD
+      name: "&c举报记录&f{reportID}&c号"
+      lore:
+        - '&a服务器:&f{server}'
+        - '&a举报人:&f{player}'
+        - '&a被举报人:&f{reported}'
+        - '&a被举报次数:&f{reportCount}'
+        - '&a理由:&f{reason}'
+        - '&a举报时间:&f{reportTime}'
+        - '&a举报类型:&f{reportType}'
+        - '&a违规言论:&f{reportChat}'
+    close:
+      slot: [8]
+      item: STAINED_GLASS_PANE
+      data: 14
+      name: '&c关闭'
+    exit:
+      slot: [31]
+      item: BARRIER
+      name: '&f取消处理'
+      lore:
+        - '&e点击取消处理此举报'
+        - '&e不执行任何操作'
+    reasons:
+      slot: [10,11,12,13,14,15,16,17,20,21,22,23,24]
+    report_player:
+      slot: [29]
+      item: _PLAYERHEAD
+      name: '&f举报者: &a&l{player}'
+      lore:
+        - '&a举报处于服务器:&f{r_server}'
+        - '&a当前处于服务器:&f{r_current_server}'
+        - '&a举报次数:&f{r_reportCount}'
+        - '&a状态:&f{r_online}'
+        - ''
+        - '&e左键传送到举报时位置'
+        - '&e右键传送到现在位置'
+    reported_player:
+      slot: [33]
+      item: _PLAYERHEAD
+      name: '&f被举报者: &a&l{reported}'
+      lore:
+        - '&a举报处于服务器:&f{server}'
+        - '&a当前处于服务器:&f{current_server}'
+        - '&a被举报次数:&f{reportCount}'
+        - '&a被举报总次数:&f{reportCounts}'
+        - '&a状态:&f{online}'
+        - ''
+        - '&e左键传送到举报时位置'
+        - '&e右键传送到现在位置'
+    cancel:
+      slot: [30]
+      item: WOOL
+      data: 14
+      name: '&f判定为&c&l虚假举报'
+  admin_cancels:
+    slot: 27
+    title: '{reported} 还存在其他被举报, 是否一并判定为&c&l虚假举报'
+    player:
+      slot: [4]
+      item: _PLAYERHEAD
+      name: '&a{reported}'
+      lore: 
+        - '&6请进行处罚操作'
+    confirm:
+      slot: [12]
+      item: WOOL
+      data: 5
+      name: '&a&l确定'
+    cancel:
+      slot: [14]
+      item: WOOL
+      data: 14
+      name: '&c&l取消'
+    warning:
+      slot: [22]
+      item: NETHER_STAR
+      name: '&c&l请注意!'
+      lore: 
+        - '&f志愿者在处理举报时必须严格遵守&e《〈烟雨庭〉志愿者守则》'
+        - '&f任何&e不合规的处罚将可能导致你面临&c撤职&f风险, 请&c&l慎重裁定&r&f!'
+        - '&f你的每一次操作&e&l都会被记录到数据库&r&f!'
+  admin_confirm:
+    slot: 27
+    title: '是否确定 处罚 {reported} 理由 {reason}'
+    player:
+      slot: [4]
+      item: _PLAYERHEAD
+      name: '&a{reported}'
+      lore: 
+        - '&6请进行处罚操作'
+    confirm:
+      slot: [12]
+      item: WOOL
+      data: 5
+      name: '&a&l确定'
+    cancel:
+      slot: [14]
+      item: WOOL
+      data: 14
+      name: '&c&l取消'
+    warning:
+      slot: [22]
+      item: NETHER_STAR
+      name: '&c&l请注意!'
+      lore: 
+        - '&f志愿者在处理举报时必须严格遵守&e《〈烟雨庭〉志愿者守则》'
+        - '&f任何&e不合规的处罚将可能导致你面临&c撤职&f风险, 请&c&l慎重裁定&r&f!'
+        - '&f你的每一次操作&e&l都会被记录到数据库&r&f!'
+
+reasons:
+  fly:
+    type: 'behaviour'
+    name: '飞行'
+    item: FEATHER
+    data: 0
+    punish:
+      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
+      - '[COMMAND] ban {reported} 365d volunteer:behaviour, reason:fly'
+  killaura:
+    type: 'behaviour'
+    name: '杀戮光环'
+    item: IRON_SWORD
+    data: 0
+    punish:
+      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
+      - '[COMMAND] ban {reported} 365d volunteer:behaviour, reason:killaura'
+  autoclick:
+    type: 'behaviour'
+    name: '连点'
+    item: 143
+    data: 0
+    punish:
+      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
+      - '[COMMAND] ban {reported} 30d volunteer:behaviour, reason:autoclick'
+  speed:
+    type: 'behaviour'
+    name: '加速'
+    item: IRON_BOOTS
+    data: 0
+    punish:
+      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
+      - '[COMMAND] ban {reported} 365d volunteer:behaviour, reason:speed'
+  velocity:
+    type: 'behaviour'
+    name: '防击退'
+    item: IRON_CHESTPLATE
+    data: 0
+    punish:
+      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
+      - '[COMMAND] ban {reported} 365d volunteer:behaviour, reason:velocity'
+  blink:
+    type: 'behaviour'
+    name: '瞬移'
+    item: POTION
+    data: 0
+    punish:
+      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
+      - '[COMMAND] ban {reported} 365d volunteer:behaviour, reason:blink'
+  other:
+    type: 'behaviour'
+    name: '其他行为'
+    item: 131
+    data: 0
+    punish:
+      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
+      - '[COMMAND] ban {reported} 365d volunteer:behaviour, reason:other'
+  teamcrossing:
+    type: 'behaviour'
+    name: '队伍联合'
+    item: 404
+    data: 0
+    punish:
+      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
+      - '[COMMAND] ban {reported} 30d volunteer:behaviour, reason:teamcrossing'
+  ad:
+    type: 'chat'
+    name: '广告'
+    item: 323
+    data: 0
+    punish:
+      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
+      - '[COMMAND] ban {reported} 365d volunteer:chat, reason:ad'
+  obscene:
+    type: 'chat'
+    name: '不雅言论'
+    item: 340
+    data: 0
+    punish:
+      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
+      - '[COMMAND] ban {reported} 3650d volunteer:chat, reason:obscene'
+  fraud:
+    type: 'chat'
+    name: '诈骗'
+    item: ARROW
+    data: 0
+    punish:
+      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
+      - '[COMMAND] ban {reported} 3650d volunteer:chat, reason:fraud'
+  porn:
+    type: 'chat'
+    name: '黄色'
+    item: WOOL
+    data: 4
+    punish:
+      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
+      - '[COMMAND] ban {reported} 3650d volunteer:chat, reason:porn'
+  chatother:
+    type: 'chat'
+    name: '其他言论违规'
+    item: 387
+    data: 0
+    punish:
+      - '[CONSOLE] matrix kick {reported} 由于不正当的游戏行为被踢出游戏'
+      - '[COMMAND] ban {reported} 3650d volunteer:chat, reason:chatother'
+
+spec:
+  - '[COMMAND] gamemode spectator'
+  - '[COMMAND] matrix spectate {tplayer}'

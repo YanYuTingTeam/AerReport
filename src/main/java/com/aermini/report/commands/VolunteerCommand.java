@@ -38,10 +38,6 @@ public class VolunteerCommand implements CommandExecutor {
                 handleLeave(player);
                 return true;
             }
-            if (args[0].equalsIgnoreCase("open")) {
-                handleOpen(player, args);
-                return true;
-            }
         }
         ReportManager reportManager = plugin.getReportManager();
         plugin.getDatabaseManager().asyncRun(() -> {
@@ -50,7 +46,7 @@ public class VolunteerCommand implements CommandExecutor {
                 Map<String, String> placeholders = new HashMap<>();
                 placeholders.put("reportID", String.valueOf(processingReport.getId()));
                 player.sendMessage(plugin.getConfigManager().getMessage("volunteer.auto-open-detail", placeholders));
-                guiManager.openAdminGUI(player, processingReport);
+                org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> guiManager.openAdminGUINow(player, processingReport));
             } else {
                 guiManager.openPanelGUI(player, 1);
             }
@@ -73,45 +69,5 @@ public class VolunteerCommand implements CommandExecutor {
                 if (!success) player.sendMessage(plugin.getConfigManager().getMessage("volunteer.exit-fail"));
             });
         });
-    }
-
-    private void handleOpen(Player player, String[] args) {
-        if (args.length < 2) {
-            player.sendMessage(plugin.getConfigManager().getMessage("gui.parse-id-fail"));
-            return;
-        }
-        try {
-            int reportId = Integer.parseInt(args[1]);
-            ReportManager reportManager = plugin.getReportManager();
-            plugin.getDatabaseManager().asyncRun(() -> {
-                ReportRecord record = reportManager.getReport(reportId);
-                if (record == null) {
-                    player.sendMessage(plugin.getConfigManager().getMessage("gui.parse-id-fail"));
-                    return;
-                }
-                if (reportManager.isProcessingBy(reportId, player.getUniqueId().toString())) {
-                    guiManager.openAdminGUI(player, record);
-                    return;
-                }
-                if (!"pending".equals(record.getStatus())) {
-                    player.sendMessage(plugin.getConfigManager().getMessage("gui.report-already-processed"));
-                    return;
-                }
-                if (reportManager.isBeingProcessedByOther(reportId, player.getUniqueId().toString())) {
-                    String processingBy = reportManager.getProcessingByName(reportId);
-                    Map<String, String> placeholders = new HashMap<>();
-                    placeholders.put("staff", processingBy);
-                    player.sendMessage(plugin.getConfigManager().getMessage("gui.processing-by-other", placeholders));
-                    return;
-                }
-                if (reportManager.startProcessing(reportId, player.getUniqueId().toString(), player.getName())) {
-                    guiManager.openAdminGUI(player, record);
-                } else {
-                    player.sendMessage(plugin.getConfigManager().getMessage("gui.process-fail"));
-                }
-            });
-        } catch (NumberFormatException e) {
-            player.sendMessage(plugin.getConfigManager().getMessage("gui.parse-id-fail"));
-        }
     }
 }
