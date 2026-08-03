@@ -18,20 +18,14 @@ settings:
   
   # 志愿者退出观察模式时可返回的服务器白名单
   # /volunteer leave 命令会返回到白名单中的服务器
-  return-server-whitelist:
-    - lobby
-    - bwlobby
-    - swlobby
-    - afklobby
-    - race
+  return-server: lobby
   
   # 志愿者退出观察者模式时执行的命令
   # {player} 会被替换为玩家名
   # [CONSOLE] 控制台执行
   # [COMMAND] 玩家执行（临时op权限）
   # [CMD] 玩家普通执行
-  exit-observer-commands:
-    - '[CONSOLE] gamemode survival {player}'
+  exit-observer-commands: []
 
 database:
   address: 127.0.0.1
@@ -65,6 +59,27 @@ menu:
       name: "&5违规言论信息(点击刷新)"
       lore:
        - '&f '
+    close:
+      slot: [8]
+      item: STAINED_GLASS_PANE
+      data: 14
+      name: "&5关闭"
+      lore:
+       - '&f '
+    volun_on:
+      slot: [7]
+      item: STAINED_GLASS_PANE
+      data: 5
+      name: "&a进入巡查模式"
+      lore:
+       - '&f '
+    volun_off:
+      slot: [7]
+      item: STAINED_GLASS_PANE
+      data: 14
+      name: "&c退出巡查模式"
+      lore:
+       - '&f '
     prev:
       slot: [17]
       item: WOOD_BUTTON
@@ -88,7 +103,7 @@ menu:
         - '&a举报人:&f{player}'
         - '&a被举报人:&f{reported}'
         - '&a被举报次数:&f{reportCount}'
-        - '&a理由:&f{reason}'
+        - '&a理由:&9{reason}'
         - '&a举报时间:&f{reportTime}'
         - '&a举报类型:&f{reportType}'
         - '&a违规言论:&f{reportChat}'
@@ -125,7 +140,7 @@ menu:
         - '&a举报人:&f{player}'
         - '&a被举报人:&f{reported}'
         - '&a被举报次数:&f{reportCount}'
-        - '&a理由:&f{reason}'
+        - '&a理由:&9{reason}'
         - '&a举报时间:&f{reportTime}'
         - '&a举报类型:&f{reportType}'
         - '&a违规言论:&f{reportChat}'
@@ -147,7 +162,7 @@ menu:
         - '&a举报人:&f{player}'
         - '&a被举报人:&f{reported}'
         - '&a被举报次数:&f{reportCount}'
-        - '&a理由:&f{reason}'
+        - '&a理由:&9{reason}'
         - '&a举报时间:&f{reportTime}'
         - '&a举报类型:&f{reportType}'
         - '&a违规言论:&f{reportChat}'
@@ -259,7 +274,7 @@ menu:
     #    - '&a举报人:&f{player}'
     #    - '&a被举报人:&f{reported}'
     #    - '&a被举报次数:&f{reportCount}'
-    #    - '&a理由:&f{reason}'
+    #    - '&a理由:&9{reason}'
     #    - '&a举报时间:&f{reportTime}'
     #    - '&a举报类型:&f{reportType}'
     #    - '&a违规言论:&f{reportChat}'

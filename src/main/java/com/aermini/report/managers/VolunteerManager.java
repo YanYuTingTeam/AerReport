@@ -2,8 +2,8 @@ package com.aermini.report.managers;
 
 import com.aermini.report.AerReport;
 import com.aermini.report.database.DatabaseManager;
+import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
-import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
 import java.util.HashMap;
@@ -14,8 +14,8 @@ import java.util.UUID;
 public class VolunteerManager {
     private final AerReport plugin;
     private final DatabaseManager databaseManager;
-    // 志愿者原始位置
-    private final Map<UUID, Location> originalLocations = new HashMap<>();
+    private final Map<UUID, org.bukkit.Location> originalLocations = new HashMap<>();
+    private final java.util.Set<UUID> patrolSet = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public VolunteerManager(AerReport plugin) {
         this.plugin = plugin;
@@ -24,46 +24,22 @@ public class VolunteerManager {
 
     public void enterObserverMode(Player player, String originalServer) {
         originalLocations.put(player.getUniqueId(), player.getLocation().clone());
-        databaseManager.asyncRun(() -> databaseManager.saveVolunteerState(player.getUniqueId(), player.getName(), originalServer));
+        if (databaseManager.getVolunteerOriginalServer(player.getUniqueId()) == null) {
+            databaseManager.asyncRun(() ->
+                    databaseManager.saveVolunteerState(player.getUniqueId(), player.getName(), originalServer));
+        }
     }
 
     public boolean exitObserverMode(Player player) {
         UUID uuid = player.getUniqueId();
-        String originalServer = databaseManager.getVolunteerOriginalServer(uuid);
-        String currentServer = plugin.getServerName();
-        List<String> returnWhitelist = plugin.getConfigManager().getReturnServerWhitelist();
-        boolean needTransfer = originalServer != null 
-                && returnWhitelist.contains(originalServer) 
-                && !originalServer.equals(currentServer);
-        plugin.getTeleportManager().restoreGameMode(player);
-        if (player.getGameMode() == GameMode.SPECTATOR) player.setGameMode(GameMode.SURVIVAL);
-        if (needTransfer) {
-            databaseManager.asyncRun(() -> databaseManager.setVolunteerPendingExit(uuid, true));
-            plugin.getBungeeManager().sendToServer(player, originalServer);
-            Map<String, String> placeholders = new HashMap<>();
-            placeholders.put("server", originalServer);
-            player.sendMessage(plugin.getConfigManager().getMessage("volunteer.exit-success", placeholders));
-        } else {
-            Location originalLocation = originalLocations.remove(uuid);
-            if (originalLocation != null && originalLocation.getWorld() != null) {
-                player.teleport(originalLocation);
-                player.sendMessage(plugin.getConfigManager().getMessage("volunteer.restore-success"));
-            } else {
-                player.sendMessage(plugin.getConfigManager().getMessage("volunteer.exit-nolocation"));
-            }
-            databaseManager.asyncRun(() -> databaseManager.removeVolunteerState(uuid));
-        }
+        boolean wasPatrol = isPatrolling(uuid);
+        if (wasPatrol) exitPatrol(player);
+        originalLocations.remove(uuid);
+        databaseManager.asyncRun(() -> databaseManager.removeVolunteerState(uuid));
         return true;
     }
 
     public void restoreAfterProcess(Player player) {
-        UUID uuid = player.getUniqueId();
-        if (!isInObserverMode(uuid)) return;
-        plugin.getTeleportManager().restoreGameMode(player);
-        if (player.getGameMode() == GameMode.SPECTATOR) player.setGameMode(GameMode.SURVIVAL);
-        Location originalLocation = originalLocations.remove(uuid);
-        if (originalLocation != null && originalLocation.getWorld() != null) player.teleport(originalLocation);
-        databaseManager.asyncRun(() -> databaseManager.removeVolunteerState(uuid));
     }
 
     public void checkAndRestoreFromObserverMode(Player player) {
@@ -72,17 +48,104 @@ public class VolunteerManager {
             boolean pending = databaseManager.isVolunteerPendingExit(uuid);
             if (pending) {
                 databaseManager.setVolunteerPendingExit(uuid, false);
-                databaseManager.removeVolunteerState(uuid);
-                org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
-                    plugin.getTeleportManager().restoreGameMode(player);
-                    if (player.getGameMode() == GameMode.SPECTATOR) player.setGameMode(GameMode.SURVIVAL);
-                    player.sendMessage(plugin.getConfigManager().getMessage("volunteer.restore-success"));
-                });
             }
         });
     }
 
     public boolean isInObserverMode(UUID playerUuid) {
         return originalLocations.containsKey(playerUuid);
+    }
+
+    public void enterPatrol(Player player) {
+        UUID uuid = player.getUniqueId();
+        patrolSet.add(uuid);
+        databaseManager.asyncRun(() -> databaseManager.setVolunteerPatrol(uuid, true));
+        Bukkit.getScheduler().runTask(plugin, () -> applyPatrol(player));
+    }
+
+    public void exitPatrol(Player player) {
+        UUID uuid = player.getUniqueId();
+        patrolSet.remove(uuid);
+        databaseManager.asyncRun(() -> {
+            databaseManager.setVolunteerPatrol(uuid, false);
+            String returnServer = plugin.getConfigManager().getReturnServer();
+            Map<String, String> placeholders = new HashMap<>();
+            placeholders.put("server", returnServer);
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                revertPatrol(player);
+                executeExitCommands(player);
+                if (returnServer != null && !returnServer.isEmpty()) {
+                    player.sendMessage(plugin.getConfigManager().getMessage("volunteer.exit-success", placeholders));
+                    plugin.getBungeeManager().sendToServer(player, returnServer);
+                }
+            });
+        });
+    }
+
+    public boolean isPatrolling(UUID uuid) {
+        return patrolSet.contains(uuid);
+    }
+
+    public boolean syncPatrolFromDb(Player player) {
+        UUID uuid = player.getUniqueId();
+        boolean patrol = databaseManager.isVolunteerPatrol(uuid);
+        if (patrol) patrolSet.add(uuid);
+        else patrolSet.remove(uuid);
+        return patrol;
+    }
+
+    public void applyPatrol(Player patrolPlayer) {
+        if (patrolPlayer == null || !patrolPlayer.isOnline()) return;
+        patrolPlayer.setGameMode(GameMode.SPECTATOR);
+        for (Player other : Bukkit.getOnlinePlayers()) {
+            if (other.getUniqueId().equals(patrolPlayer.getUniqueId())) continue;
+            other.hidePlayer(patrolPlayer);
+        }
+    }
+
+    public void revertPatrol(Player patrolPlayer) {
+        if (patrolPlayer == null || !patrolPlayer.isOnline()) return;
+        if (patrolPlayer.getGameMode() == GameMode.SPECTATOR) patrolPlayer.setGameMode(GameMode.SURVIVAL);
+        for (Player other : Bukkit.getOnlinePlayers()) {
+            if (other.getUniqueId().equals(patrolPlayer.getUniqueId())) continue;
+            other.showPlayer(patrolPlayer);
+        }
+    }
+
+    public void hidePatrolsFrom(Player joiningPlayer) {
+        for (UUID patrolUuid : patrolSet) {
+            Player patrolPlayer = Bukkit.getPlayer(patrolUuid);
+            if (patrolPlayer != null && patrolPlayer.isOnline()) {
+                joiningPlayer.hidePlayer(patrolPlayer);
+            }
+        }
+    }
+
+    public void enforcePatrolGameMode(Player patrolPlayer) {
+        if (patrolPlayer == null) return;
+        if (!patrolSet.contains(patrolPlayer.getUniqueId())) return;
+        if (patrolPlayer.getGameMode() != GameMode.SPECTATOR) {
+            patrolPlayer.setGameMode(GameMode.SPECTATOR);
+        }
+    }
+
+    private void executeExitCommands(Player player) {
+        List<String> cmds = plugin.getConfigManager().getExitObserverCommands();
+        for (String cmd : cmds) {
+            cmd = cmd.replace("{player}", player.getName());
+            if (cmd.startsWith("[CONSOLE] ")) {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.substring("[CONSOLE] ".length()));
+            } else if (cmd.startsWith("[COMMAND] ")) {
+                boolean wasOp = player.isOp();
+                try {
+                    player.setOp(true);
+                    player.performCommand(cmd.substring("[COMMAND] ".length()));
+                } finally {
+                    player.setOp(wasOp);
+                }
+            } else if (cmd.startsWith("[CMD] ")) {
+                player.performCommand(cmd.substring("[CMD] ".length()));
+            }
+        }
     }
 }

@@ -1,9 +1,13 @@
 package com.aermini.report.listeners;
 
+import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
@@ -28,19 +32,24 @@ public class ChatListener implements Listener {
         );
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
-        plugin.getPlayerDataManager().recordPlayerJoin(event.getPlayer().getName());
-        plugin.getBungeeManager().onPlayerJoin(event.getPlayer());
+        final Player player = event.getPlayer();
+        plugin.getPlayerDataManager().recordPlayerJoin(player.getName());
+        plugin.getBungeeManager().onPlayerJoin(player);
         plugin.getReportManager().updatePlayerInfo(
-                event.getPlayer().getUniqueId(),
-                event.getPlayer().getName(),
+                player.getUniqueId(),
+                player.getName(),
                 plugin.getServerName(),
                 true
         );
-        
-        if (event.getPlayer().hasPermission("aerreport.staff.main")) {
+
+        plugin.getVolunteerManager().hidePatrolsFrom(player);
+
+        if (player.hasPermission("aerreport.staff.main")) {
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                applyPatrolIfNeeded(player);
+
                 plugin.getDatabaseManager().asyncRun(() -> {
                     int pending = plugin.getReportManager().getPendingReportCount();
                     if (pending > 0) {
@@ -48,20 +57,35 @@ public class ChatListener implements Listener {
                                 .replace("{waiting}", String.valueOf(pending));
                         TextComponent clickableMessage = new TextComponent(message);
                         clickableMessage.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/volunteer"));
-                        clickableMessage.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, 
+                        clickableMessage.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
                                 new TextComponent[]{new TextComponent("§7打开志愿者面板")}));
-                        event.getPlayer().spigot().sendMessage(clickableMessage);
+                        player.spigot().sendMessage(clickableMessage);
                     }
                 });
-                plugin.getTeleportManager().checkAndProcessTeleportRequest(
-                        event.getPlayer().getUniqueId());
-                plugin.getVolunteerManager().checkAndRestoreFromObserverMode(event.getPlayer());
+                plugin.getTeleportManager().checkAndProcessTeleportRequest(player.getUniqueId());
+                plugin.getVolunteerManager().checkAndRestoreFromObserverMode(player);
             }, 40L);
         } else {
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                plugin.getVolunteerManager().checkAndRestoreFromObserverMode(event.getPlayer());
+                plugin.getVolunteerManager().checkAndRestoreFromObserverMode(player);
             }, 40L);
         }
+    }
+
+    private void applyPatrolIfNeeded(Player player) {
+        boolean patrol = plugin.getVolunteerManager().syncPatrolFromDb(player);
+        if (patrol) {
+            plugin.getVolunteerManager().applyPatrol(player);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onGameModeChange(PlayerGameModeChangeEvent event) {
+        Player player = event.getPlayer();
+        if (!plugin.getVolunteerManager().isPatrolling(player.getUniqueId())) return;
+        if (event.getNewGameMode() == GameMode.SPECTATOR) return;
+        event.setCancelled(true);
+        Bukkit.getScheduler().runTask(plugin, () -> player.setGameMode(GameMode.SPECTATOR));
     }
 
     @EventHandler
@@ -77,7 +101,5 @@ public class ChatListener implements Listener {
         plugin.getReportManager().cleanupPlayerData(uuid);
         plugin.getGUIManager().removeSelectedPlayer(uuid);
         plugin.getGUIManager().removePanelCache(uuid);
-        // 要考虑到切子服而退出服务器 于是不在此处重置处理中状态
-        // cleanupExpiredProcessing负责定期处理. 见 ReportManager.java
     }
 }

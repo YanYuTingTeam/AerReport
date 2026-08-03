@@ -281,7 +281,19 @@ public class GUIListener implements Listener {
 
     private void handlePanelClick(Player player, ItemStack item, ClickType clickType, int rawSlot) {
         MenuConfig menuConfig = configManager.getMenuConfig("panel");
-        // behaviour/chat 类型切换
+        if (isClickInSlot(rawSlot, menuConfig, "close")) {
+            player.closeInventory();
+            return;
+        }
+        if (isClickInSlot(rawSlot, menuConfig, "volun_on")) {
+            plugin.getVolunteerManager().enterPatrol(player);
+            guiManager.openPanelGUI(player, 1);
+            return;
+        }
+        if (isClickInSlot(rawSlot, menuConfig, "volun_off")) {
+            plugin.getVolunteerManager().exitPatrol(player);
+            return;
+        }
         if (isClickInSlot(rawSlot, menuConfig, "behaviour")) {
             guiManager.openPanelGUI(player, 1, "behaviour");
             return;
@@ -290,7 +302,6 @@ public class GUIListener implements Listener {
             guiManager.openPanelGUI(player, 1, "chat");
             return;
         }
-        // backindex 快速返回首页(当前类型)
         if (isClickInSlot(rawSlot, menuConfig, "backindex")) {
             guiManager.openPanelGUI(player, 1);
             return;

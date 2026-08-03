@@ -309,6 +309,10 @@ public class ConfigManager {
         return config.getStringList("settings.return-server-whitelist");
     }
 
+    public String getReturnServer() {
+        return config.getString("settings.return-server", "lobby");
+    }
+
     public List<String> getExitObserverCommands() {
         return config.getStringList("settings.exit-observer-commands");
     }

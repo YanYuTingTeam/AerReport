@@ -241,7 +241,14 @@ public class GUIManager {
                 menuConfig.getData("next"), menuConfig.getName("next"), new ArrayList<>());
         int nextSlot = getSlot(menuConfig, "next");
         if (nextSlot >= 0) inv.setItem(nextSlot, nextItem);
-        // backindex: 配置存在则创建, 点击回到首页
+        int closeSlot = getSlot(menuConfig, "close");
+        if (closeSlot >= 0) {
+            ItemStack closeItem = GUIUtils.createItem(menuConfig.getItem("close"), 1,
+                    menuConfig.getData("close"), menuConfig.getName("close"),
+                    menuConfig.getLore("close") != null && !menuConfig.getLore("close").isEmpty()
+                            ? menuConfig.getLore("close") : new ArrayList<>());
+            inv.setItem(closeSlot, closeItem);
+        }
         int backindexSlot = getSlot(menuConfig, "backindex");
         if (backindexSlot >= 0) {
             ItemStack backindexItem = GUIUtils.createItem(menuConfig.getItem("backindex"), 1,
@@ -250,12 +257,32 @@ public class GUIManager {
         }
         reportManager.setStaffPage(player.getUniqueId(), page);
         openInvSync(player, inv);
+
+        final java.util.UUID pUuid = player.getUniqueId();
+        final boolean patrol = plugin.getVolunteerManager().syncPatrolFromDb(player);
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            Player p = Bukkit.getPlayer(pUuid);
+            if (p == null || !p.isOnline()) return;
+            String openTitle = p.getOpenInventory().getTitle();
+            if (openTitle == null) return;
+            if (!menuConfig.getTitle().equals(openTitle)) return;
+            org.bukkit.inventory.Inventory topInv = p.getOpenInventory().getTopInventory();
+            if (topInv == null) return;
+            String volunItem = patrol ? "volun_off" : "volun_on";
+            int volunSlot = getSlot(menuConfig, volunItem);
+            if (volunSlot >= 0) {
+                ItemStack volunStack = GUIUtils.createItem(menuConfig.getItem(volunItem), 1,
+                        menuConfig.getData(volunItem), menuConfig.getName(volunItem),
+                        menuConfig.getLore(volunItem) != null && !menuConfig.getLore(volunItem).isEmpty()
+                                ? menuConfig.getLore(volunItem) : new ArrayList<>());
+                topInv.setItem(volunSlot, volunStack);
+            }
+        });
         });
     }
 
     private ItemStack createReportItem(ReportRecord record, MenuConfig menuConfig, Player viewer) {
         List<String> lore = new ArrayList<>(menuConfig.getLore("report"));
-        // 合并组字段优先, 单条回退
         String players = record.getMergedReporterNames() != null ? record.getMergedReporterNames() : record.getReporterName();
         String reasons = record.getMergedReasonNames() != null ? record.getMergedReasonNames() : record.getReasonName();
         String count = record.getMergedCount() > 0 ? String.valueOf(record.getMergedCount()) : String.valueOf(record.getReportCount());

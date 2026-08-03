@@ -164,13 +164,13 @@ public class DatabaseManager {
                 "INDEX idx_staff (staff_uuid)" +
                 ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
 
-        // 志愿者状态表
         String createVolunteerStateTable = "CREATE TABLE IF NOT EXISTS " + tablePrefix + "volunteer_state (" +
                 "id INT AUTO_INCREMENT PRIMARY KEY, " +
                 "player_uuid VARCHAR(36) NOT NULL UNIQUE, " +
                 "player_name VARCHAR(64) NOT NULL, " +
                 "original_server VARCHAR(64), " +
                 "pending_exit BOOLEAN DEFAULT FALSE, " +
+                "patrol BOOLEAN DEFAULT FALSE, " +
                 "created_time BIGINT NOT NULL, " +
                 "INDEX idx_player (player_uuid)" +
                 ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
@@ -186,6 +186,9 @@ public class DatabaseManager {
             try {
                 stmt.execute("ALTER TABLE " + tablePrefix + "reports " +
                         "MODIFY COLUMN status ENUM('pending','processing','processed','fake','unbanned') DEFAULT 'pending'");
+            } catch (SQLException ignored) {}
+            try {
+                stmt.execute("ALTER TABLE " + tablePrefix + "volunteer_state ADD COLUMN patrol BOOLEAN DEFAULT FALSE");
             } catch (SQLException ignored) {}
         } catch (SQLException e) {
             plugin.getLogger().severe("创建数据表失败 -> " + e.getMessage());
@@ -312,5 +315,35 @@ public class DatabaseManager {
         } catch (SQLException e) {
             plugin.getLogger().severe("删除志愿者状态失败 -> " + e.getMessage());
         }
+    }
+
+    public void setVolunteerPatrol(UUID playerUuid, boolean patrol) {
+        String sql = "UPDATE " + tablePrefix + "volunteer_state SET patrol = ? WHERE player_uuid = ?";
+        try {
+            int count = update(sql, patrol, playerUuid.toString());
+            if (count == 0) {
+                String insertSql = "INSERT INTO " + tablePrefix + "volunteer_state " +
+                        "(player_uuid, player_name, original_server, pending_exit, patrol, created_time) " +
+                        "VALUES (?, ?, NULL, FALSE, ?, ?) ON DUPLICATE KEY UPDATE patrol = ?";
+                update(insertSql, playerUuid.toString(), playerUuid.toString(),
+                        patrol, System.currentTimeMillis(), patrol);
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().severe("设置志愿者巡查模式失败 -> " + e.getMessage());
+        }
+    }
+
+    public boolean isVolunteerPatrol(UUID playerUuid) {
+        String sql = "SELECT patrol FROM " + tablePrefix + "volunteer_state WHERE player_uuid = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, playerUuid.toString());
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return rs.getBoolean("patrol");
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().severe("检查志愿者巡查模式失败 -> " + e.getMessage());
+        }
+        return false;
     }
 }
