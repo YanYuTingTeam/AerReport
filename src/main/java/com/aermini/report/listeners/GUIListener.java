@@ -285,14 +285,18 @@ public class GUIListener implements Listener {
             player.closeInventory();
             return;
         }
-        if (isClickInSlot(rawSlot, menuConfig, "volun_on")) {
-            plugin.getVolunteerManager().enterPatrol(player);
-            guiManager.openPanelGUI(player, 1);
-            return;
-        }
-        if (isClickInSlot(rawSlot, menuConfig, "volun_off")) {
-            plugin.getVolunteerManager().exitPatrol(player);
-            return;
+        boolean patrolling = plugin.getVolunteerManager().isPatrolling(player.getUniqueId());
+        if (patrolling) {
+            if (isClickInSlot(rawSlot, menuConfig, "volun_off")) {
+                plugin.getVolunteerManager().exitPatrol(player);
+                return;
+            }
+        } else {
+            if (isClickInSlot(rawSlot, menuConfig, "volun_on")) {
+                plugin.getVolunteerManager().enterPatrol(player);
+                guiManager.openPanelGUI(player, 1);
+                return;
+            }
         }
         if (isClickInSlot(rawSlot, menuConfig, "behaviour")) {
             guiManager.openPanelGUI(player, 1, "behaviour");
