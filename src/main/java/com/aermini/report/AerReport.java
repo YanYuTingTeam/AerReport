@@ -85,7 +85,6 @@ public class AerReport extends JavaPlugin {
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             teleportManager.cleanupExpiredRequests();
             chatManager.cleanupOldMessages();
-            reportManager.cleanupExpiredProcessing();
         }, 72000L, 72000L);
         
         // 提醒待处理举报

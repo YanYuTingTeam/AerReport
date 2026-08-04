@@ -328,28 +328,7 @@ public class GUIListener implements Listener {
                 int reportId = Integer.parseInt(idStr);
                 ReportRecord cached = guiManager.getCachedPanelReport(player.getUniqueId(), reportId);
                 if (cached != null) {
-                    String selfUuid = player.getUniqueId().toString();
-                    if ("processing".equals(cached.getStatus()) && cached.getProcessingBy() != null 
-                            && !cached.getProcessingBy().equals(selfUuid)) {
-                        plugin.getDatabaseManager().asyncRun(() -> {
-                            String processingBy = reportManager.getStaffNameByUuid(cached.getProcessingBy());
-                            Map<String, String> placeholders = new HashMap<>();
-                            placeholders.put("staff", processingBy);
-                            player.sendMessage(configManager.getMessage("gui.processing-by-other", placeholders));
-                        });
-                        return;
-                    }
                     guiManager.openAdminGUINow(player, cached);
-                    plugin.getDatabaseManager().asyncRun(() -> {
-                        // 后台抢占处理权, 被别人抢了就退出面板
-                        if (!reportManager.startProcessing(reportId, selfUuid, player.getName())) {
-                            String processingBy = reportManager.getProcessingByName(reportId);
-                            Map<String, String> placeholders = new HashMap<>();
-                            placeholders.put("staff", processingBy);
-                            player.sendMessage(configManager.getMessage("gui.processing-by-other", placeholders));
-                            Bukkit.getScheduler().runTask(plugin, player::closeInventory);
-                        }
-                    });
                     return;
                 }
                 if (!guiManager.startOpening(player.getUniqueId())) return;
@@ -357,18 +336,6 @@ public class GUIListener implements Listener {
                     try {
                         ReportRecord record = reportManager.getReport(reportId);
                         if (record == null) return;
-                        if (reportManager.isBeingProcessedByOther(reportId, player.getUniqueId().toString())) {
-                            String processingBy = reportManager.getProcessingByName(reportId);
-                            Map<String, String> placeholders = new HashMap<>();
-                            placeholders.put("staff", processingBy);
-                            player.sendMessage(configManager.getMessage("gui.processing-by-other", placeholders));
-                            return;
-                        }
-                        if (!reportManager.startProcessing(reportId, player.getUniqueId().toString(), player.getName())) {
-                            player.sendMessage(configManager.getMessage("gui.process-fail"));
-                            return;
-                        }
-                        // 改用 openAdminGUINow 同步开 UI, 不再走 openAdminGUI 异步链路, 消除点击延迟
                         Bukkit.getScheduler().runTask(plugin, () -> guiManager.openAdminGUINow(player, record));
                     } finally {
                         guiManager.finishOpening(player.getUniqueId());
@@ -388,15 +355,11 @@ public class GUIListener implements Listener {
             return;
         }
         if (isInSlot(item, menuConfig, "close")) {
-            reportManager.cancelProcessing(record.getId(), player.getUniqueId().toString());
-            plugin.getVolunteerManager().restoreAfterProcess(player);
             player.closeInventory();
             return;
         }
         if (isClickInSlot(slot, menuConfig, "exit")) {
-            reportManager.cancelProcessing(record.getId(), player.getUniqueId().toString());
             player.sendMessage(configManager.getMessage("gui.cancel-process"));
-            plugin.getVolunteerManager().restoreAfterProcess(player);
             guiManager.openPanelGUI(player, 1);
             return;
         }
@@ -447,7 +410,6 @@ public class GUIListener implements Listener {
             String reasonName = ChatColor.stripColor(item.getItemMeta().getDisplayName());
             ReasonConfig reason = findReasonByName(reasonName);
             if (reason != null) {
-                if ("processed".equals(record.getStatus())) plugin.getDatabaseManager().asyncRun(() -> reportManager.startProcessing(record.getId(), player.getUniqueId().toString(), player.getName()));
                 selectedReasons.put(player.getUniqueId(), reason.getId());
                 guiManager.openAdminConfirmGUI(player, record, reason.getId(), reason.getName());
             } else {

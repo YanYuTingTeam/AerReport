@@ -55,15 +55,11 @@ public class AerReportCommand implements CommandExecutor {
     private void handleReset(CommandSender sender, String[] args) {
         if (args.length < 2) {
             sender.sendMessage(plugin.getConfigManager().getMessage("admin.reset-usage"));
-            sender.sendMessage(plugin.getConfigManager().getMessage("admin.reset-process-help"));
             sender.sendMessage(plugin.getConfigManager().getMessage("admin.reset-all-help"));
             return;
         }
         String type = args[1].toLowerCase();
         switch (type) {
-            case "process":
-                resetProcess(sender);
-                break;
             case "all":
                 resetAll(sender);
                 break;
@@ -74,13 +70,6 @@ public class AerReportCommand implements CommandExecutor {
                 sender.sendMessage(plugin.getConfigManager().getMessage("admin.reset-types-available"));
                 break;
         }
-    }
-
-    private void resetProcess(CommandSender sender) {
-        int count = plugin.getReportManager().resetAllProcessing();
-        Map<String, String> placeholders = new HashMap<>();
-        placeholders.put("count", String.valueOf(count));
-        sender.sendMessage(plugin.getConfigManager().getMessage("admin.reset-process-success", placeholders));
     }
 
     private void resetAll(CommandSender sender) {

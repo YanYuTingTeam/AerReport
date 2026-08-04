@@ -26,9 +26,7 @@ public class ReportManager {
     private final java.util.concurrent.ConcurrentHashMap<UUID, Integer> playerPages; // vt页码
     private final java.util.concurrent.ConcurrentHashMap<UUID, Integer> staffPages; // vtn页码
     private final java.util.concurrent.ConcurrentHashMap<UUID, String> staffReportType; // 志愿者当前查看的举报类型 behaviour/chat
-    private final java.util.concurrent.ConcurrentHashMap<UUID, ReportRecord> selectedReports; // 选中的举报记录
-    // reportID -> staffUUID
-    private final java.util.concurrent.ConcurrentHashMap<Integer, String> processingReports = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<UUID, ReportRecord> selectedReports;
     public ReportManager(AerReport plugin) {
         this.plugin = plugin;
         this.db = plugin.getDatabaseManager();
@@ -344,78 +342,6 @@ public class ReportManager {
         return null;
     }
 
-    public boolean startProcessing(int reportId, String staffUuid, String staffName) {
-        String checkSql = "SELECT status, processing_by FROM " + db.getTablePrefix() + "reports WHERE id = ?"; // 检查是否已被处理
-        try (Connection conn = db.getConnection();
-             PreparedStatement checkStmt = conn.prepareStatement(checkSql)) {
-            checkStmt.setInt(1, reportId);
-            try (ResultSet rs = checkStmt.executeQuery()) {
-                if (rs.next()) {
-                    String status = rs.getString("status");
-                    String processingBy = rs.getString("processing_by");
-                    if ("processing".equals(status) && processingBy != null && !processingBy.equals(staffUuid)) {
-                        return false; // 已被处理
-                    }
-                }
-            }
-        } catch (SQLException e) {
-            plugin.getLogger().severe("检查举报状态失败 -> " + e.getMessage());
-            return false;
-        }
-        long processingTime = System.currentTimeMillis();
-        String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'processing', " +
-                "processing_by = ?, processing_time = ? WHERE id = ?";
-        try {
-            db.update(sql, staffUuid, processingTime, reportId);
-            processingReports.put(reportId, staffUuid);
-            return true;
-        } catch (SQLException e) {
-            plugin.getLogger().severe("设置处理状态失败 -> " + e.getMessage());
-            return false;
-        }
-    }
-
-    public void cancelProcessing(int reportId, String staffUuid) {
-        String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'pending', " +
-                "processing_by = NULL, processing_time = NULL WHERE id = ? AND processing_by = ?";
-        db.asyncRun(() -> {
-            try {
-                db.update(sql, reportId, staffUuid);
-            } catch (SQLException e) {
-                plugin.getLogger().severe("取消处理状态失败 -> " + e.getMessage());
-            }
-        });
-        processingReports.remove(reportId);
-    }
-
-    public String getProcessingBy(int reportId) {
-        String sql = "SELECT processing_by FROM " + db.getTablePrefix() + "reports WHERE id = ?";
-        try (Connection conn = db.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, reportId);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) return rs.getString("processing_by");
-            }
-        } catch (SQLException e) {
-            plugin.getLogger().severe("获取处理志愿者失败 -> " + e.getMessage());
-        }
-        return null;
-    }
-
-    public boolean isBeingProcessedByOther(int reportId, String staffUuid) {
-        String processingBy = getProcessingBy(reportId);
-        return processingBy != null && !processingBy.equals(staffUuid);
-    }
-    
-    public boolean isProcessingBy(int reportId, String staffUuid) {
-        String processingBy = getProcessingBy(reportId);
-        return staffUuid.equals(processingBy);
-    }
-
-    public String getProcessingByName(int reportId) {
-        return getStaffNameByUuid(getProcessingBy(reportId));
-    }
-
     public String getStaffNameByUuid(String staffUuid) {
         if (staffUuid == null) return null;
         Player player = Bukkit.getPlayer(UUID.fromString(staffUuid));
@@ -433,25 +359,6 @@ public class ReportManager {
         return staffUuid;
     }
 
-    public ReportRecord getProcessingReportRecord(String staffUuid) {
-        String sql = "SELECT * FROM " + db.getTablePrefix() + "reports WHERE processing_by = ? AND status = 'processing'";
-        try (Connection conn = db.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, staffUuid);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) return ReportRecord.fromResultSet(rs);
-            }
-        } catch (SQLException e) {
-            plugin.getLogger().severe("获取正在处理的举报失败 -> " + e.getMessage());
-        }
-        return null;
-    }
-
-    /**
-     * 获取指定玩家的待处理举报 pending/processing
-     * @param reportedUuid 被举报者的UUID
-     * @return 最近的待处理举报记录，如果没有则返回null
-     */
     public ReportRecord getPendingReportByReported(String reportedUuid) {
         String sql = withCountSql("WHERE r.reported = ? AND r.status IN ('pending', 'processing') " +
                 "ORDER BY r.report_time DESC LIMIT 1");
@@ -491,7 +398,6 @@ public class ReportManager {
                 e.printStackTrace();
             }
         });
-        processingReports.remove(reportId);
     }
 
     private String getLatestBanId(String reportedUuid, long processTime) {
@@ -545,7 +451,6 @@ public class ReportManager {
                 e.printStackTrace();
             }
         });
-        processingReports.remove(reportId);
     }
 
     public void markAsUnbanned(int reportId, String staffUuid, String staffName) {
@@ -564,7 +469,6 @@ public class ReportManager {
                 plugin.getLogger().severe("标记解封失败 -> " + e.getMessage());
             }
         });
-        processingReports.remove(reportId);
     }
 
     // 按 reported+report_type 批量虚假举报, 不影响另一类型
@@ -692,54 +596,6 @@ public class ReportManager {
             }
         });
     }
-    
-    public String getProcessingReport(String staffUuid) {
-        String sql = "SELECT reported_name FROM " + db.getTablePrefix() + "reports " +
-                "WHERE processing_by = ? AND status = 'processing' LIMIT 1";
-        try (Connection conn = db.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, staffUuid);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) return rs.getString("reported_name");
-            }
-        } catch (SQLException e) {
-            plugin.getLogger().severe("获取处理中举报失败 -> " + e.getMessage());
-        }
-        return null;
-    }
-
-    public void cleanupExpiredProcessing() {
-        long expireTime = System.currentTimeMillis() - 5 * 60 * 1000;
-        String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'pending', " +
-                "processing_by = NULL, processing_time = NULL WHERE status = 'processing' AND processing_time < ?";
-        try {
-            db.update(sql, expireTime);
-        } catch (SQLException e) {
-            plugin.getLogger().severe("清理过期处理失败 -> " + e.getMessage());
-        }
-    }
-
-    public int resetAllProcessing() {
-        String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'pending', " +
-                "processing_by = NULL, processing_time = NULL WHERE status = 'processing'";
-        try {
-            return db.update(sql);
-        } catch (SQLException e) {
-            plugin.getLogger().severe("重置处理中状态失败 -> " + e.getMessage());
-            return 0;
-        }
-    }
-
-    public int resetProcessingByStaff(String staffUuid) {
-        String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'pending', " +
-                "processing_by = NULL, processing_time = NULL WHERE processing_by = ?";
-        try {
-            return db.update(sql, staffUuid);
-        } catch (SQLException e) {
-            plugin.getLogger().severe("重置志愿者处理状态失败 -> " + e.getMessage());
-            return 0;
-        }
-    }
 
     public int resetAllReports() {
         String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'pending', " +
@@ -799,7 +655,6 @@ public class ReportManager {
             staffPages.clear();
             staffReportType.clear();
             selectedReports.clear();
-            processingReports.clear();
         } catch (SQLException e) {
             plugin.getLogger().severe("full reset失败 -> " + e.getMessage());
             e.printStackTrace();

@@ -302,24 +302,8 @@ public class GUIManager {
             lore.set(i, line);
         }
         String name = menuConfig.getName("report").replace("{reportID}", String.valueOf(record.getId()));
-        String itemMaterial;
-        int itemData = 0;
-        if ("processing".equals(record.getStatus())) {
-            String processingUuid = record.getProcessingBy();
-            String processingBy = reportManager.getStaffNameByUuid(processingUuid);
-            if (processingBy != null) {
-                if (viewer.getUniqueId().toString().equals(processingUuid)) {
-                    lore.add(0, GUIUtils.colorize("&e&l你正在处理此举报"));
-                } else {
-                    lore.add(0, GUIUtils.colorize("&c&l正在被 " + processingBy + " 处理中..."));
-                }
-            }
-            itemMaterial = menuConfig.getSection().getString("report.item.working", "REDSTONE");
-            itemData = menuConfig.getSection().getInt("report.data.working", 0);
-        } else {
-            itemMaterial = menuConfig.getSection().getString("report.item.normal", "DIAMOND");
-            itemData = menuConfig.getSection().getInt("report.data.normal", 0);
-        }
+        String itemMaterial = menuConfig.getSection().getString("report.item.normal", "DIAMOND");
+        int itemData = menuConfig.getSection().getInt("report.data.normal", 0);
         return GUIUtils.createItem(itemMaterial, 1, itemData, name, lore);
     }
 

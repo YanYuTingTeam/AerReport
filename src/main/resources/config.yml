@@ -3,8 +3,7 @@ config:
   # 志愿者跨服传送后执行的命令（以志愿者身份执行）
   # {player} 会被替换为志愿者名, {tplayer} 会被替换为目标玩家名
   # 注意：gamemode spectator 已内置到代码中，无需在此配置
-  teleport_commands:
-    - '[COMMAND] matrix spectate {tplayer}'
+  teleport_commands: []
 
 settings:
   # 通知时间差阈值（毫秒）
@@ -103,7 +102,7 @@ menu:
         - '&a举报人:&f{player}'
         - '&a被举报人:&f{reported}'
         - '&a被举报次数:&f{reportCount}'
-        - '&a理由:&9{reason}'
+        - '&a理由:&5{reason}'
         - '&a举报时间:&f{reportTime}'
         - '&a举报类型:&f{reportType}'
         - '&a违规言论:&f{reportChat}'
@@ -140,7 +139,7 @@ menu:
         - '&a举报人:&f{player}'
         - '&a被举报人:&f{reported}'
         - '&a被举报次数:&f{reportCount}'
-        - '&a理由:&9{reason}'
+        - '&a理由:&5{reason}'
         - '&a举报时间:&f{reportTime}'
         - '&a举报类型:&f{reportType}'
         - '&a违规言论:&f{reportChat}'
@@ -162,7 +161,7 @@ menu:
         - '&a举报人:&f{player}'
         - '&a被举报人:&f{reported}'
         - '&a被举报次数:&f{reportCount}'
-        - '&a理由:&9{reason}'
+        - '&a理由:&5{reason}'
         - '&a举报时间:&f{reportTime}'
         - '&a举报类型:&f{reportType}'
         - '&a违规言论:&f{reportChat}'
@@ -274,7 +273,7 @@ menu:
     #    - '&a举报人:&f{player}'
     #    - '&a被举报人:&f{reported}'
     #    - '&a被举报次数:&f{reportCount}'
-    #    - '&a理由:&9{reason}'
+    #    - '&a理由:&5{reason}'
     #    - '&a举报时间:&f{reportTime}'
     #    - '&a举报类型:&f{reportType}'
     #    - '&a违规言论:&f{reportChat}'
@@ -491,4 +490,3 @@ reasons:
 
 spec:
   - '[COMMAND] gamemode spectator'
-  - '[COMMAND] matrix spectate {tplayer}'

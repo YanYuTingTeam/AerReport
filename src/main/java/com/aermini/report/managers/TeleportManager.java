@@ -174,11 +174,6 @@ public class TeleportManager {
             }
         });
     }
-    
-    public void executeCommandsForStaff(Player player) {
-        String reportedName = plugin.getReportManager().getProcessingReport(player.getUniqueId().toString());
-        if (reportedName != null) executeTeleportCommands(player, reportedName);
-    }
 
     public void cleanupExpiredRequests() {
         long expireTime = System.currentTimeMillis() - 3600000; // 1h留存
