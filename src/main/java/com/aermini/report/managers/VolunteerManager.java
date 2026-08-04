@@ -5,6 +5,7 @@ import com.aermini.report.database.DatabaseManager;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
+import org.bukkit.metadata.FixedMetadataValue;
 
 import java.util.HashMap;
 import java.util.List;
@@ -95,6 +96,7 @@ public class VolunteerManager {
         patrolPlayer.setGameMode(GameMode.SPECTATOR);
         patrolPlayer.setAllowFlight(true);
         patrolPlayer.setFlying(true);
+        patrolPlayer.setMetadata("aerreport:patrol", new FixedMetadataValue(plugin, true));
         for (Player other : Bukkit.getOnlinePlayers()) {
             if (other.getUniqueId().equals(patrolPlayer.getUniqueId())) continue;
             other.hidePlayer(patrolPlayer);
@@ -106,6 +108,7 @@ public class VolunteerManager {
         if (patrolPlayer.getGameMode() == GameMode.SPECTATOR) patrolPlayer.setGameMode(GameMode.SURVIVAL);
         patrolPlayer.setFlying(false);
         patrolPlayer.setAllowFlight(false);
+        patrolPlayer.removeMetadata("aerreport:patrol", plugin);
         for (Player other : Bukkit.getOnlinePlayers()) {
             if (other.getUniqueId().equals(patrolPlayer.getUniqueId())) continue;
             other.showPlayer(patrolPlayer);
