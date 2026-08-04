@@ -282,14 +282,14 @@ menu:
     #  item: STAINED_GLASS_PANE
     #  data: 14
     #  name: '&c关闭'
-    exit:
-      slot: [8]
-      item: STAINED_GLASS_PANE
-      data: 14
-      name: '&f取消处理'
-      lore:
-        - '&e点击取消处理此举报'
-        - '&e不执行任何操作'
+    #exit:
+    #  slot: [8]
+    #  item: STAINED_GLASS_PANE
+    #  data: 14
+    #  name: '&f取消处理'
+    #  lore:
+    #    - '&e点击取消处理此举报'
+    #    - '&e不执行任何操作'
     teleport:
       slot: [13]
       item: NETHER_STAR

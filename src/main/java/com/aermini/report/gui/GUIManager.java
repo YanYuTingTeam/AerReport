@@ -110,18 +110,24 @@ public class GUIManager {
                     Arrays.asList(GUIUtils.colorize(menuConfig.getLore("player").get(0))));
             inv.setItem(slots.get(i), item);
         }
-        ItemStack prevItem = GUIUtils.createItem(menuConfig.getItem("prev"), 1, 
-                menuConfig.getData("prev"), menuConfig.getName("prev"), new ArrayList<>());
-        int slot = getSlot(menuConfig, "prev");
-        if (slot >= 0) inv.setItem(slot, prevItem);
-        ItemStack nextItem = GUIUtils.createItem(menuConfig.getItem("next"), 1,
-                menuConfig.getData("next"), menuConfig.getName("next"), new ArrayList<>());
+        int prevSlot = getSlot(menuConfig, "prev");
+        if (prevSlot >= 0) {
+            ItemStack prevItem = GUIUtils.createItem(menuConfig.getItem("prev"), 1,
+                    menuConfig.getData("prev"), menuConfig.getName("prev"), new ArrayList<>());
+            inv.setItem(prevSlot, prevItem);
+        }
         int nextSlot = getSlot(menuConfig, "next");
-        if (nextSlot >= 0) inv.setItem(nextSlot, nextItem);
-        ItemStack closeItem = GUIUtils.createItem(menuConfig.getItem("close"), 1,
-                menuConfig.getData("close"), menuConfig.getName("close"), new ArrayList<>());
+        if (nextSlot >= 0) {
+            ItemStack nextItem = GUIUtils.createItem(menuConfig.getItem("next"), 1,
+                    menuConfig.getData("next"), menuConfig.getName("next"), new ArrayList<>());
+            inv.setItem(nextSlot, nextItem);
+        }
         int closeSlot = getSlot(menuConfig, "close");
-        if (closeSlot >= 0) inv.setItem(closeSlot, closeItem);
+        if (closeSlot >= 0) {
+            ItemStack closeItem = GUIUtils.createItem(menuConfig.getItem("close"), 1,
+                    menuConfig.getData("close"), menuConfig.getName("close"), new ArrayList<>());
+            inv.setItem(closeSlot, closeItem);
+        }
         reportManager.setPlayerPage(player.getUniqueId(), page);
         player.openInventory(inv);
     }
@@ -137,10 +143,12 @@ public class GUIManager {
                 menuConfig.getLore("player"));
         int playerSlot = getSlot(menuConfig, "player");
         if (playerSlot >= 0) inv.setItem(playerSlot, playerHead);
-        ItemStack closeItem = GUIUtils.createItem(menuConfig.getItem("close"), 1,
-                menuConfig.getData("close"), menuConfig.getName("close"), new ArrayList<>());
         int closeSlot = getSlot(menuConfig, "close");
-        if (closeSlot >= 0) inv.setItem(closeSlot, closeItem);
+        if (closeSlot >= 0) {
+            ItemStack closeItem = GUIUtils.createItem(menuConfig.getItem("close"), 1,
+                    menuConfig.getData("close"), menuConfig.getName("close"), new ArrayList<>());
+            inv.setItem(closeSlot, closeItem);
+        }
         List<ReasonConfig> reasons = config.getReasonList();
         List<Integer> slots = menuConfig.getSlots("reasons");
         for (int i = 0; i < slots.size() && i < reasons.size(); i++) {
@@ -171,18 +179,24 @@ public class GUIManager {
                     Arrays.asList(GUIUtils.colorize("&c点击处罚此玩家")));
             inv.setItem(slots.get(i), item);
         }
-        ItemStack prevItem = GUIUtils.createItem(menuConfig.getItem("prev"), 1, 
-                menuConfig.getData("prev"), menuConfig.getName("prev"), new ArrayList<>());
-        int slot = getSlot(menuConfig, "prev");
-        if (slot >= 0) inv.setItem(slot, prevItem);
-        ItemStack nextItem = GUIUtils.createItem(menuConfig.getItem("next"), 1,
-                menuConfig.getData("next"), menuConfig.getName("next"), new ArrayList<>());
+        int prevSlot = getSlot(menuConfig, "prev");
+        if (prevSlot >= 0) {
+            ItemStack prevItem = GUIUtils.createItem(menuConfig.getItem("prev"), 1,
+                    menuConfig.getData("prev"), menuConfig.getName("prev"), new ArrayList<>());
+            inv.setItem(prevSlot, prevItem);
+        }
         int nextSlot = getSlot(menuConfig, "next");
-        if (nextSlot >= 0) inv.setItem(nextSlot, nextItem);
-        ItemStack closeItem = GUIUtils.createItem(menuConfig.getItem("close"), 1,
-                menuConfig.getData("close"), menuConfig.getName("close"), new ArrayList<>());
+        if (nextSlot >= 0) {
+            ItemStack nextItem = GUIUtils.createItem(menuConfig.getItem("next"), 1,
+                    menuConfig.getData("next"), menuConfig.getName("next"), new ArrayList<>());
+            inv.setItem(nextSlot, nextItem);
+        }
         int closeSlot = getSlot(menuConfig, "close");
-        if (closeSlot >= 0) inv.setItem(closeSlot, closeItem);
+        if (closeSlot >= 0) {
+            ItemStack closeItem = GUIUtils.createItem(menuConfig.getItem("close"), 1,
+                    menuConfig.getData("close"), menuConfig.getName("close"), new ArrayList<>());
+            inv.setItem(closeSlot, closeItem);
+        }
 
         reportManager.setPlayerPage(player.getUniqueId(), page);
         player.openInventory(inv);
@@ -200,10 +214,12 @@ public class GUIManager {
         plugin.getDatabaseManager().asyncRun(() -> {
         String title = menuConfig.getTitle();
         Inventory inv = Bukkit.createInventory(null, menuConfig.getSlot(), title);
-        ItemStack mainItem = GUIUtils.createItem(menuConfig.getItem("main"), 1,
-                menuConfig.getData("main"), menuConfig.getName("main"), menuConfig.getLore("main"));
         int mainSlot = getSlot(menuConfig, "main");
-        if (mainSlot >= 0) inv.setItem(mainSlot, mainItem);
+        if (mainSlot >= 0) {
+            ItemStack mainItem = GUIUtils.createItem(menuConfig.getItem("main"), 1,
+                    menuConfig.getData("main"), menuConfig.getName("main"), menuConfig.getLore("main"));
+            inv.setItem(mainSlot, mainItem);
+        }
 
         // behaviour/chat
         int behaviourSlot = getSlot(menuConfig, "behaviour");
@@ -233,14 +249,18 @@ public class GUIManager {
             inv.setItem(slots.get(i), item);
         }
         panelCache.put(player.getUniqueId(), pageCache);
-        ItemStack prevItem = GUIUtils.createItem(menuConfig.getItem("prev"), 1,
-                menuConfig.getData("prev"), menuConfig.getName("prev"), new ArrayList<>());
         int prevSlot = getSlot(menuConfig, "prev");
-        if (prevSlot >= 0) inv.setItem(prevSlot, prevItem);
-        ItemStack nextItem = GUIUtils.createItem(menuConfig.getItem("next"), 1,
-                menuConfig.getData("next"), menuConfig.getName("next"), new ArrayList<>());
+        if (prevSlot >= 0) {
+            ItemStack prevItem = GUIUtils.createItem(menuConfig.getItem("prev"), 1,
+                    menuConfig.getData("prev"), menuConfig.getName("prev"), new ArrayList<>());
+            inv.setItem(prevSlot, prevItem);
+        }
         int nextSlot = getSlot(menuConfig, "next");
-        if (nextSlot >= 0) inv.setItem(nextSlot, nextItem);
+        if (nextSlot >= 0) {
+            ItemStack nextItem = GUIUtils.createItem(menuConfig.getItem("next"), 1,
+                    menuConfig.getData("next"), menuConfig.getName("next"), new ArrayList<>());
+            inv.setItem(nextSlot, nextItem);
+        }
         int closeSlot = getSlot(menuConfig, "close");
         if (closeSlot >= 0) {
             ItemStack closeItem = GUIUtils.createItem(menuConfig.getItem("close"), 1,
@@ -471,28 +491,30 @@ public class GUIManager {
         int playerSlot = getSlot(menuConfig, "player");
         if (playerSlot >= 0) inv.setItem(playerSlot, playerHead);
 
-        ItemStack closeItem = GUIUtils.createItem(menuConfig.getItem("close"), 1,
-                menuConfig.getData("close"), menuConfig.getName("close"), new ArrayList<>());
         int closeSlot = getSlot(menuConfig, "close");
-        if (closeSlot >= 0) inv.setItem(closeSlot, closeItem);
-        // 举报者/被举报者头颅, 注释配置后 slot=-1 自动跳过
+        if (closeSlot >= 0) {
+            ItemStack closeItem = GUIUtils.createItem(menuConfig.getItem("close"), 1,
+                    menuConfig.getData("close"), menuConfig.getName("close"), new ArrayList<>());
+            inv.setItem(closeSlot, closeItem);
+        }
         ItemStack reporterHead = buildReporterHead(menuConfig, record, rCount, rOnline, rCurrentServer);
         int reporterSlot = getSlot(menuConfig, "report_player");
         if (reporterSlot >= 0) inv.setItem(reporterSlot, reporterHead);
         ItemStack reportedHead = buildReportedHead(menuConfig, record, dOnline, currentServer);
         int reportedSlot = getSlot(menuConfig, "reported_player");
         if (reportedSlot >= 0) inv.setItem(reportedSlot, reportedHead);
-        // 取消处理
-        ItemStack exitItem = GUIUtils.createItem(menuConfig.getItem("exit"), 1,
-                menuConfig.getData("exit"), menuConfig.getName("exit"), new ArrayList<>());
         int exitSlot = getSlot(menuConfig, "exit");
-        if (exitSlot >= 0) inv.setItem(exitSlot, exitItem);
-
-        // 虚假举报
-        ItemStack cancelItem = GUIUtils.createItem(menuConfig.getItem("cancel"), 1,
-                menuConfig.getData("cancel"), menuConfig.getName("cancel"), new ArrayList<>());
+        if (exitSlot >= 0) {
+            ItemStack exitItem = GUIUtils.createItem(menuConfig.getItem("exit"), 1,
+                    menuConfig.getData("exit"), menuConfig.getName("exit"), new ArrayList<>());
+            inv.setItem(exitSlot, exitItem);
+        }
         int cancelSlot = getSlot(menuConfig, "cancel");
-        if (cancelSlot >= 0) inv.setItem(cancelSlot, cancelItem);
+        if (cancelSlot >= 0) {
+            ItemStack cancelItem = GUIUtils.createItem(menuConfig.getItem("cancel"), 1,
+                    menuConfig.getData("cancel"), menuConfig.getName("cancel"), new ArrayList<>());
+            inv.setItem(cancelSlot, cancelItem);
+        }
 
         // teleport/ban365/ban3650 新物品, 配置存在则创建
         int teleportSlot = getSlot(menuConfig, "teleport");
@@ -547,22 +569,26 @@ public class GUIManager {
         int playerSlot = getSlot(menuConfig, "player");
         if (playerSlot >= 0) inv.setItem(playerSlot, playerHead);
 
-        ItemStack confirmItem = GUIUtils.createItem(menuConfig.getItem("confirm"), 1,
-                menuConfig.getData("confirm"), menuConfig.getName("confirm"), new ArrayList<>());
         int confirmSlot = getSlot(menuConfig, "confirm");
-        if (confirmSlot >= 0) inv.setItem(confirmSlot, confirmItem);
-        else player.sendMessage(config.getMessage("gui.confirm-slot-not-config"));
+        if (confirmSlot >= 0) {
+            ItemStack confirmItem = GUIUtils.createItem(menuConfig.getItem("confirm"), 1,
+                    menuConfig.getData("confirm"), menuConfig.getName("confirm"), new ArrayList<>());
+            inv.setItem(confirmSlot, confirmItem);
+        } else player.sendMessage(config.getMessage("gui.confirm-slot-not-config"));
 
-        ItemStack cancelItem = GUIUtils.createItem(menuConfig.getItem("cancel"), 1,
-                menuConfig.getData("cancel"), menuConfig.getName("cancel"), new ArrayList<>());
         int cancelSlot = getSlot(menuConfig, "cancel");
-        if (cancelSlot >= 0) inv.setItem(cancelSlot, cancelItem);
-        else player.sendMessage(config.getMessage("gui.cancel-slot-not-config"));
+        if (cancelSlot >= 0) {
+            ItemStack cancelItem = GUIUtils.createItem(menuConfig.getItem("cancel"), 1,
+                    menuConfig.getData("cancel"), menuConfig.getName("cancel"), new ArrayList<>());
+            inv.setItem(cancelSlot, cancelItem);
+        } else player.sendMessage(config.getMessage("gui.cancel-slot-not-config"));
 
-        ItemStack warningItem = GUIUtils.createItem(menuConfig.getItem("warning"), 1,
-                menuConfig.getData("warning"), menuConfig.getName("warning"), menuConfig.getLore("warning"));
         int warningSlot = getSlot(menuConfig, "warning");
-        if (warningSlot >= 0) inv.setItem(warningSlot, warningItem);
+        if (warningSlot >= 0) {
+            ItemStack warningItem = GUIUtils.createItem(menuConfig.getItem("warning"), 1,
+                    menuConfig.getData("warning"), menuConfig.getName("warning"), menuConfig.getLore("warning"));
+            inv.setItem(warningSlot, warningItem);
+        }
         openInvSync(player, inv);
         });
     }
@@ -576,10 +602,12 @@ public class GUIManager {
         plugin.getDatabaseManager().asyncRun(() -> {
         String title = menuConfig.getTitle();
         Inventory inv = Bukkit.createInventory(null, menuConfig.getSlot(), title);
-        ItemStack mainItem = GUIUtils.createItem(menuConfig.getItem("main"), 1,
-                menuConfig.getData("main"), menuConfig.getName("main"), menuConfig.getLore("main"));
         int mainSlot = getSlot(menuConfig, "main");
-        if (mainSlot >= 0) inv.setItem(mainSlot, mainItem);
+        if (mainSlot >= 0) {
+            ItemStack mainItem = GUIUtils.createItem(menuConfig.getItem("main"), 1,
+                    menuConfig.getData("main"), menuConfig.getName("main"), menuConfig.getLore("main"));
+            inv.setItem(mainSlot, mainItem);
+        }
 
         int pageSize = menuConfig.getSlots("report").size();
         List<ReportRecord> reports = reportManager.getProcessedReports(page, pageSize);
@@ -592,14 +620,18 @@ public class GUIManager {
             ItemStack item = createUnbanReportItem(record, menuConfig);
             inv.setItem(slots.get(i), item);
         }
-        ItemStack prevItem = GUIUtils.createItem(menuConfig.getItem("prev"), 1,
-                menuConfig.getData("prev"), menuConfig.getName("prev"), new ArrayList<>());
         int prevSlot = getSlot(menuConfig, "prev");
-        if (prevSlot >= 0) inv.setItem(prevSlot, prevItem);
-        ItemStack nextItem = GUIUtils.createItem(menuConfig.getItem("next"), 1,
-                menuConfig.getData("next"), menuConfig.getName("next"), new ArrayList<>());
+        if (prevSlot >= 0) {
+            ItemStack prevItem = GUIUtils.createItem(menuConfig.getItem("prev"), 1,
+                    menuConfig.getData("prev"), menuConfig.getName("prev"), new ArrayList<>());
+            inv.setItem(prevSlot, prevItem);
+        }
         int nextSlot = getSlot(menuConfig, "next");
-        if (nextSlot >= 0) inv.setItem(nextSlot, nextItem);
+        if (nextSlot >= 0) {
+            ItemStack nextItem = GUIUtils.createItem(menuConfig.getItem("next"), 1,
+                    menuConfig.getData("next"), menuConfig.getName("next"), new ArrayList<>());
+            inv.setItem(nextSlot, nextItem);
+        }
         reportManager.setStaffPage(player.getUniqueId(), page);
         openInvSync(player, inv);
         });
@@ -668,27 +700,35 @@ public class GUIManager {
                 playerLore);
         int playerSlot = getSlot(menuConfig, "player");
         if (playerSlot >= 0) inv.setItem(playerSlot, playerHead);
-        ItemStack changeReasonItem = GUIUtils.createItem(menuConfig.getItem("changeReason"), 1,
-                menuConfig.getData("changeReason"), menuConfig.getName("changeReason"), 
-                menuConfig.getLore("changeReason"));
         int changeReasonSlot = getSlot(menuConfig, "changeReason");
-        if (changeReasonSlot >= 0) inv.setItem(changeReasonSlot, changeReasonItem);
+        if (changeReasonSlot >= 0) {
+            ItemStack changeReasonItem = GUIUtils.createItem(menuConfig.getItem("changeReason"), 1,
+                    menuConfig.getData("changeReason"), menuConfig.getName("changeReason"),
+                    menuConfig.getLore("changeReason"));
+            inv.setItem(changeReasonSlot, changeReasonItem);
+        }
         List<String> unbanLore = new ArrayList<>(menuConfig.getLore("unban"));
         for (int i = 0; i < unbanLore.size(); i++) {
             unbanLore.set(i, unbanLore.get(i).replace("{reported}", record.getReportedName()));
         }
-        ItemStack unbanItem = GUIUtils.createItem(menuConfig.getItem("unban"), 1,
-                menuConfig.getData("unban"), menuConfig.getName("unban"), unbanLore);
         int unbanSlot = getSlot(menuConfig, "unban");
-        if (unbanSlot >= 0) inv.setItem(unbanSlot, unbanItem);
-        ItemStack exitItem = GUIUtils.createItem(menuConfig.getItem("exit"), 1,
-                menuConfig.getData("exit"), menuConfig.getName("exit"), menuConfig.getLore("exit"));
+        if (unbanSlot >= 0) {
+            ItemStack unbanItem = GUIUtils.createItem(menuConfig.getItem("unban"), 1,
+                    menuConfig.getData("unban"), menuConfig.getName("unban"), unbanLore);
+            inv.setItem(unbanSlot, unbanItem);
+        }
         int exitSlot = getSlot(menuConfig, "exit");
-        if (exitSlot >= 0) inv.setItem(exitSlot, exitItem);
-        ItemStack closeItem = GUIUtils.createItem(menuConfig.getItem("close"), 1,
-                menuConfig.getData("close"), menuConfig.getName("close"), new ArrayList<>());
+        if (exitSlot >= 0) {
+            ItemStack exitItem = GUIUtils.createItem(menuConfig.getItem("exit"), 1,
+                    menuConfig.getData("exit"), menuConfig.getName("exit"), menuConfig.getLore("exit"));
+            inv.setItem(exitSlot, exitItem);
+        }
         int closeSlot = getSlot(menuConfig, "close");
-        if (closeSlot >= 0) inv.setItem(closeSlot, closeItem);
+        if (closeSlot >= 0) {
+            ItemStack closeItem = GUIUtils.createItem(menuConfig.getItem("close"), 1,
+                    menuConfig.getData("close"), menuConfig.getName("close"), new ArrayList<>());
+            inv.setItem(closeSlot, closeItem);
+        }
         openInvSync(player, inv);
         });
     }
@@ -707,18 +747,24 @@ public class GUIManager {
                 menuConfig.getLore("player"));
         int playerSlot = getSlot(menuConfig, "player");
         if (playerSlot >= 0) inv.setItem(playerSlot, playerHead);
-        ItemStack confirmItem = GUIUtils.createItem(menuConfig.getItem("confirm"), 1,
-                menuConfig.getData("confirm"), menuConfig.getName("confirm"), new ArrayList<>());
         int confirmSlot = getSlot(menuConfig, "confirm");
-        if (confirmSlot >= 0) inv.setItem(confirmSlot, confirmItem);
-        ItemStack cancelItem = GUIUtils.createItem(menuConfig.getItem("cancel"), 1,
-                menuConfig.getData("cancel"), menuConfig.getName("cancel"), new ArrayList<>());
+        if (confirmSlot >= 0) {
+            ItemStack confirmItem = GUIUtils.createItem(menuConfig.getItem("confirm"), 1,
+                    menuConfig.getData("confirm"), menuConfig.getName("confirm"), new ArrayList<>());
+            inv.setItem(confirmSlot, confirmItem);
+        }
         int cancelSlot = getSlot(menuConfig, "cancel");
-        if (cancelSlot >= 0) inv.setItem(cancelSlot, cancelItem);
-        ItemStack warningItem = GUIUtils.createItem(menuConfig.getItem("warning"), 1,
-                menuConfig.getData("warning"), menuConfig.getName("warning"), menuConfig.getLore("warning"));
+        if (cancelSlot >= 0) {
+            ItemStack cancelItem = GUIUtils.createItem(menuConfig.getItem("cancel"), 1,
+                    menuConfig.getData("cancel"), menuConfig.getName("cancel"), new ArrayList<>());
+            inv.setItem(cancelSlot, cancelItem);
+        }
         int warningSlot = getSlot(menuConfig, "warning");
-        if (warningSlot >= 0) inv.setItem(warningSlot, warningItem);
+        if (warningSlot >= 0) {
+            ItemStack warningItem = GUIUtils.createItem(menuConfig.getItem("warning"), 1,
+                    menuConfig.getData("warning"), menuConfig.getName("warning"), menuConfig.getLore("warning"));
+            inv.setItem(warningSlot, warningItem);
+        }
         openInvSync(player, inv);
         });
     }
