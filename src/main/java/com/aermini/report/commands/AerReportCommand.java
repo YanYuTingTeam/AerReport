@@ -107,7 +107,6 @@ public class AerReportCommand implements CommandExecutor {
     private void sendHelp(CommandSender sender) {
         sender.sendMessage(plugin.getConfigManager().getMessage("admin.help-header"));
         sender.sendMessage(plugin.getConfigManager().getMessage("admin.help-report"));
-        sender.sendMessage(plugin.getConfigManager().getMessage("admin.help-volunteer"));
         sender.sendMessage(plugin.getConfigManager().getMessage("admin.help-reload"));
         sender.sendMessage(plugin.getConfigManager().getMessage("admin.help-info"));
         sender.sendMessage(plugin.getConfigManager().getMessage("admin.help-reset-process"));

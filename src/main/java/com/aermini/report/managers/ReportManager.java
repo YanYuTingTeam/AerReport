@@ -453,24 +453,6 @@ public class ReportManager {
         });
     }
 
-    public void markAsUnbanned(int reportId, String staffUuid, String staffName) {
-        long processTime = System.currentTimeMillis();
-        String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'unbanned', " +
-                "processed_by = ?, processed_by_name = ?, processed_time = ?, processing_by = NULL WHERE id = ?";
-        db.asyncRun(() -> {
-            try {
-                db.update(sql, staffUuid, staffName, processTime, reportId);
-                ReportRecord record = getReport(reportId);
-                if (record != null) {
-                    logAction(reportId, staffUuid, staffName, "unban", record.getReporterUuid(),
-                            record.getReportedUuid(), "解封", null);
-                }
-            } catch (SQLException e) {
-                plugin.getLogger().severe("标记解封失败 -> " + e.getMessage());
-            }
-        });
-    }
-
     // 按 reported+report_type 批量虚假举报, 不影响另一类型
     public void batchMarkAsFakeByType(String reportedUuid, String reportType, int excludeReportId, String staffUuid, String staffName) {
         long processTime = System.currentTimeMillis();

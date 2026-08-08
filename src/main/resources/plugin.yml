@@ -7,15 +7,9 @@ commands:
   report:
     permission: aerreport.use
     aliases: [r]
-  volunteer:
+  vt:
     permission: aerreport.staff.main
-    aliases: [vt, reports, vr]
-  volunteern:
-    permission: aerreport.staff.main
-    aliases: [vtn, vban, vb, bans, reporter]
-  volun:
-    permission: aerreport.staff.unban
-    aliases: [vn, vunban, vun, unbans, reported]
+    aliases: [volunteer, reports, vr]
   aerreport:
     permission: aerreport.admin
     aliases: [ar, are, areport]
@@ -26,8 +20,6 @@ permissions:
   aerreport.staff.main:
     default: op
   aerreport.staff.alert:
-    default: op
-  aerreport.staff.unban:
     default: op
   aerreport.admin:
     default: op

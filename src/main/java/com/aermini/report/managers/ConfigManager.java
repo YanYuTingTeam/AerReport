@@ -43,8 +43,8 @@ public class ConfigManager {
         if (!configFile.exists()) plugin.saveResource("config.yml", false);
         config=YamlConfiguration.loadConfiguration(configFile);
 
-        Reader defConfigStream = new InputStreamReader(plugin.getResource("config.yml"), StandardCharsets.UTF_8);
-        if (defConfigStream != null) {
+        if (plugin.getResource("config.yml") != null) {
+            Reader defConfigStream = new InputStreamReader(plugin.getResource("config.yml"), StandardCharsets.UTF_8);
             YamlConfiguration defConfig = YamlConfiguration.loadConfiguration(defConfigStream);
             config.setDefaults(defConfig);
         }

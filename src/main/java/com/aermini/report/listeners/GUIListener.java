@@ -70,10 +70,6 @@ public class GUIListener implements Listener {
         if (title.equals("选择玩家处罚")) return true;
         if (title.startsWith("处罚玩家 ")) return true;
         if (title.startsWith("是否确定 处罚 ")) return true;
-        MenuConfig unbanPanelConfig = configManager.getMenuConfig("unbanpanel");
-        if (unbanPanelConfig != null && title.equals(unbanPanelConfig.getTitle())) return true;
-        if (title.startsWith("处理被封禁玩家 ")) return true;
-        if (title.startsWith("是否确定 解封 ")) return true;
         if (title.equals("§c§l确认完全重置数据")) return true;
         return false;
     }
@@ -118,19 +114,6 @@ public class GUIListener implements Listener {
         }
         if (title.startsWith("是否确定 处罚 ")) {
             handleAdminConfirmClick(player, item, event.getRawSlot());
-            return;
-        }
-        MenuConfig unbanPanelConfig = configManager.getMenuConfig("unbanpanel");
-        if (unbanPanelConfig != null && title.equals(unbanPanelConfig.getTitle())) {
-            handleUnbanPanelClick(player, item, event.getRawSlot());
-            return;
-        }
-        if (title.startsWith("处理被封禁玩家 ")) {
-            handleUnbanAdminClick(player, item, event.getRawSlot());
-            return;
-        }
-        if (title.startsWith("是否确定 解封 ")) {
-            handleUnbanConfirmClick(player, item, event.getRawSlot());
             return;
         }
         if (title.equals("§c§l确认完全重置数据")) {
@@ -671,97 +654,6 @@ public class GUIListener implements Listener {
     public void cleanupPlayerData(UUID uuid) {
         selectedReasons.remove(uuid);
     }
-    
-    private void handleUnbanPanelClick(Player player, ItemStack item, int rawSlot) {
-        MenuConfig menuConfig = configManager.getMenuConfig("unbanpanel");
-        if (isClickInSlot(rawSlot, menuConfig, "main")) {
-            player.closeInventory();
-            return;
-        }
-        if (isClickInSlot(rawSlot, menuConfig, "prev")) {
-            int page = reportManager.getStaffPage(player.getUniqueId());
-            if (page > 1) {
-                guiManager.openUnbanPanelGUI(player, page - 1);
-            }
-            return;
-        }
-        if (isClickInSlot(rawSlot, menuConfig, "next")) {
-            int page = reportManager.getStaffPage(player.getUniqueId());
-            guiManager.openUnbanPanelGUI(player, page + 1);
-            return;
-        }
-        List<Integer> reportSlots = menuConfig.getSlots("report");
-        if (reportSlots != null && reportSlots.contains(rawSlot)) {
-            String displayName = item.getItemMeta().getDisplayName();
-            String idStr = ChatColor.stripColor(displayName).replaceAll("[^0-9]", "");
-            try {
-                int reportId = Integer.parseInt(idStr);
-                if (!guiManager.startOpening(player.getUniqueId())) return;
-                plugin.getDatabaseManager().asyncRun(() -> {
-                    try {
-                        ReportRecord record = reportManager.getReport(reportId);
-                        if (record != null && "processed".equals(record.getStatus())) {
-                            reportManager.setSelectedReport(player.getUniqueId(), record);
-                            guiManager.openUnbanAdminGUI(player, record);
-                        }
-                    } finally {
-                        guiManager.finishOpening(player.getUniqueId());
-                    }
-                });
-            } catch (NumberFormatException e) {
-                player.sendMessage(configManager.getMessage("gui.parse-id-fail"));
-            }
-        }
-    }
-    
-    private void handleUnbanAdminClick(Player player, ItemStack item, int rawSlot) {
-        MenuConfig menuConfig = configManager.getMenuConfig("unbanadmin");
-        ReportRecord record = reportManager.getSelectedReport(player.getUniqueId());
-        if (record == null) {
-            player.closeInventory();
-            return;
-        }
-        if (isClickInSlot(rawSlot, menuConfig, "close")) {
-            player.closeInventory();
-            return;
-        }
-        if (isClickInSlot(rawSlot, menuConfig, "exit")) {
-            guiManager.openUnbanPanelGUI(player, 1);
-            return;
-        }
-        if (isClickInSlot(rawSlot, menuConfig, "changeReason")) {
-            guiManager.openAdminGUI(player, record);
-            return;
-        }
-        if (isClickInSlot(rawSlot, menuConfig, "unban")) {
-            guiManager.openUnbanConfirmGUI(player, record);
-            return;
-        }
-    }
-
-    private void handleUnbanConfirmClick(Player player, ItemStack item, int rawSlot) {
-        MenuConfig menuConfig = configManager.getMenuConfig("unban_confirm");
-        ReportRecord record = reportManager.getSelectedReport(player.getUniqueId());
-        if (record == null) {
-            player.closeInventory();
-            return;
-        }
-        if (isClickInSlot(rawSlot, menuConfig, "cancel")) {
-            guiManager.openUnbanAdminGUI(player, record);
-            return;
-        }
-        if (isClickInSlot(rawSlot, menuConfig, "confirm")) {
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "unban " + record.getReportedName());
-            reportManager.markAsUnbanned(record.getId(), 
-                    player.getUniqueId().toString(), 
-                    player.getName());
-            Map<String, String> placeholders = new HashMap<>();
-            placeholders.put("reported", record.getReportedName());
-            player.sendMessage(configManager.getMessage("gui.unban-success", placeholders));
-            guiManager.openUnbanPanelGUI(player, 1);
-        }
-    }
-
     private void handleFullResetConfirmClick(Player player, ItemStack item, int rawSlot) {
         if (rawSlot == 14 || rawSlot == 15 || rawSlot == 24) {
             // cancel

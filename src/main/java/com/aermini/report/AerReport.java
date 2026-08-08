@@ -5,9 +5,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 
 import com.aermini.report.commands.AerReportCommand;
 import com.aermini.report.commands.ReportCommand;
-import com.aermini.report.commands.VolunCommand;
 import com.aermini.report.commands.VolunteerCommand;
-import com.aermini.report.commands.VolunteerNCommand;
 import com.aermini.report.database.DatabaseManager;
 import com.aermini.report.gui.GUIManager;
 import com.aermini.report.listeners.ChatListener;
@@ -47,7 +45,7 @@ public class AerReport extends JavaPlugin {
         chatManager = new ChatManager(this);
         playerDataManager = new PlayerDataManager(this);
         volunteerManager = new VolunteerManager(this);
-        
+
         registerCommands();
         registerListeners();
         startTasks();
@@ -66,9 +64,7 @@ public class AerReport extends JavaPlugin {
 
     private void registerCommands() {
         getCommand("report").setExecutor(new ReportCommand(this));
-        getCommand("volunteer").setExecutor(new VolunteerCommand(this));
-        getCommand("volunteern").setExecutor(new VolunteerNCommand(this));
-        getCommand("volun").setExecutor(new VolunCommand(this));
+        getCommand("vt").setExecutor(new VolunteerCommand(this));
         getCommand("aerreport").setExecutor(new AerReportCommand(this));
     }
 
@@ -86,19 +82,19 @@ public class AerReport extends JavaPlugin {
             teleportManager.cleanupExpiredRequests();
             chatManager.cleanupOldMessages();
         }, 72000L, 72000L);
-        
+
         // 提醒待处理举报
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             int pending = reportManager.getPendingReportCount();
             if (pending > 0) {
                 String message = configManager.getMessage("notification")
                         .replace("{waiting}", String.valueOf(pending));
-                net.md_5.bungee.api.chat.TextComponent clickableMessage = 
+                net.md_5.bungee.api.chat.TextComponent clickableMessage =
                         new net.md_5.bungee.api.chat.TextComponent(message);
                 clickableMessage.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
                         net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND, "/volunteer"));
                 clickableMessage.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
-                        net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT, 
+                        net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
                         new net.md_5.bungee.api.chat.TextComponent[]{
                                 new net.md_5.bungee.api.chat.TextComponent("§7打开志愿者面板")}));
                 getServer().getOnlinePlayers().stream()
