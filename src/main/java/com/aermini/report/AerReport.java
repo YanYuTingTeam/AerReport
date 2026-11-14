@@ -57,6 +57,7 @@ public class AerReport extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (volunteerManager != null) volunteerManager.removeAllPatrolMetadata();
         if (databaseManager != null) databaseManager.close();
         if (bungeeManager != null) bungeeManager.destroy();
         getLogger().info("AerReport 已禁用");

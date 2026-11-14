@@ -129,6 +129,7 @@ public class ChatListener implements Listener {
         if (plugin.getVolunteerManager().isPatrolling(uuid)) {
             event.setQuitMessage(null);
         }
+        plugin.getVolunteerManager().handleQuit(player);
         plugin.getPlayerDataManager().clearPlayerJoinTime(player.getName());
         plugin.getReportManager().updatePlayerInfo(
                 uuid,

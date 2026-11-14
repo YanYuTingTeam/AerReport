@@ -79,15 +79,35 @@ public class VolunteerManager {
         }
     }
 
+    public void handleQuit(Player player) {
+        UUID uuid = player.getUniqueId();
+        player.removeMetadata("aerreport:patrol", plugin);
+        patrolSet.remove(uuid);
+        originalLocations.remove(uuid);
+    }
+
     public boolean isPatrolling(UUID uuid) {
         return patrolSet.contains(uuid);
+    }
+
+    public void removeAllPatrolMetadata() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            player.removeMetadata("aerreport:patrol", plugin);
+        }
     }
 
     public boolean syncPatrolFromDb(Player player) {
         UUID uuid = player.getUniqueId();
         boolean patrol = databaseManager.isVolunteerPatrol(uuid);
         if (patrol) patrolSet.add(uuid);
-        else patrolSet.remove(uuid);
+        else if (plugin.isEnabled()) {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (player.isOnline() && !isPatrolling(uuid)) {
+                    patrolSet.remove(uuid);
+                    player.removeMetadata("aerreport:patrol", plugin);
+                }
+            });
+        }
         return patrol;
     }
 
