@@ -10,6 +10,8 @@ commands:
   vt:
     permission: aerreport.staff.main
     aliases: [volunteer, reports, vr]
+  vtn:
+    permission: aerreport.staff.main
   aerreport:
     permission: aerreport.admin
     aliases: [ar, are, areport]

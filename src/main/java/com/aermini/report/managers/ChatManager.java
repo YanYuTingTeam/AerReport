@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 
 public class ChatManager {
     private final AerReport plugin;
@@ -37,17 +38,20 @@ public class ChatManager {
         List<String> messages = recentMessages.computeIfAbsent(uuid, k -> new CopyOnWriteArrayList<>());
         messages.add(message);
         if (messages.size() > MAX_MESSAGES) messages.remove(0);
-        asyncDbPool.execute(() -> {
-            long time = System.currentTimeMillis();
-            String server = plugin.getServerName();
-            String sql = "INSERT INTO " + db.getTablePrefix() + "chat " +
-                    "(uuid, name, server, message, time) VALUES (?, ?, ?, ?, ?)";
-            try {
-                db.update(sql, uuid.toString(), name, server, message, time);
-            } catch (SQLException e) {
-                plugin.getLogger().severe("记录聊天失败 -> " + e.getMessage());
-            }
-        });
+        try {
+            asyncDbPool.execute(() -> {
+                long time = System.currentTimeMillis();
+                String server = plugin.getServerName();
+                String sql = "INSERT INTO " + db.getTablePrefix() + "chat " +
+                        "(uuid, name, server, message, time) VALUES (?, ?, ?, ?, ?)";
+                try {
+                    db.update(sql, uuid.toString(), name, server, message, time);
+                } catch (SQLException e) {
+                    plugin.getLogger().severe("记录聊天失败 -> " + e.getMessage());
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException ignored) {
+        }
     }
 
     public String getRecentMessages(UUID uuid) {
@@ -84,6 +88,15 @@ public class ChatManager {
             db.update(sql, expireTime);
         } catch (SQLException e) {
             plugin.getLogger().severe("清理聊天失败 -> " + e.getMessage());
+        }
+    }
+
+    public void close() {
+        asyncDbPool.shutdown();
+        try {
+            asyncDbPool.awaitTermination(2, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 }

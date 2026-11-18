@@ -19,7 +19,6 @@ import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import com.aermini.report.AerReport;
 import com.aermini.report.gui.GUIManager;
@@ -228,7 +227,7 @@ public class GUIListener implements Listener {
                 if (displayName != null && !displayName.isEmpty()) {
                     Player target = Bukkit.getPlayerExact(displayName);
                     if (target == null) {
-                        player.sendMessage(configManager.getMessage("player-not-found"));
+                        player.sendMessage(configManager.getMessage("player_offline"));
                         return;
                     }
                     UUID targetId = target.getUniqueId();
@@ -348,15 +347,19 @@ public class GUIListener implements Listener {
         }
         if (isClickInSlot(slot, menuConfig, "cancel")) {
             // 合并举报后, 直接把当前合并组(同 reported+type)判定为虚假举报
-            plugin.getDatabaseManager().asyncRun(() -> {
-                reportManager.markAsFake(record.getId(),
-                        player.getUniqueId().toString(),
-                        player.getName());
-                reportManager.batchMarkAsFakeByType(record.getReportedUuid(),
-                        record.getReportType(), record.getId(),
-                        player.getUniqueId().toString(), player.getName());
-                player.sendMessage(configManager.getMessage("gui.fake-report-batch"));
-                Bukkit.getScheduler().runTask(plugin, () -> {
+            final String staffUuid = player.getUniqueId().toString();
+            final String staffName = player.getName();
+            reportManager.claimForFake(record.getId(), record.getReportedUuid(), record.getReportType(), staffUuid, staffName, claimed -> {
+                if (!claimed) {
+                    player.sendMessage(configManager.getMessage("gui.report-already-processed"));
+                    return;
+                }
+                reportManager.finishFake(record.getId(), staffUuid, staffName, ok -> {
+                    if (!ok) {
+                        player.sendMessage(configManager.getMessage("gui.process-fail"));
+                        return;
+                    }
+                    player.sendMessage(configManager.getMessage("gui.fake-report-batch"));
                     plugin.getVolunteerManager().restoreAfterProcess(player);
                     player.closeInventory();
                 });
@@ -442,18 +445,16 @@ public class GUIListener implements Listener {
                     targetServer,
                     x, y, z, world,
                     "report_time",
-                    isSameServer
-            );
-            if (!isSameServer) {
-                plugin.getBungeeManager().sendToServer(player, targetServer);
-            } else {
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        plugin.getTeleportManager().processTeleportRequest(player);
+                    isSameServer,
+                    () -> {
+                        if (!player.isOnline()) return;
+                        if (isSameServer) {
+                            plugin.getTeleportManager().processTeleportRequest(player);
+                        } else {
+                            plugin.getBungeeManager().sendToServer(player, targetServer);
+                        }
                     }
-                }.runTaskLater(plugin, 20L);
-            }
+            );
             String messagePath = isReporter ? "teleport.to-reporter-time" : "teleport.to-reported-time";
             player.sendMessage(configManager.getMessage(messagePath, placeholders));
         }
@@ -500,10 +501,13 @@ public class GUIListener implements Listener {
                 server,
                 0, 0, 0, "world",
                 "current",
-                false
+                false,
+                () -> {
+                    if (!player.isOnline()) return;
+                    plugin.getBungeeManager().sendServerInvite(player.getUniqueId(), UUID.fromString(targetUuid), server);
+                    plugin.getBungeeManager().sendToServer(player, server);
+                }
         );
-        plugin.getBungeeManager().sendServerInvite(player.getUniqueId(), UUID.fromString(targetUuid), server);
-        plugin.getBungeeManager().sendToServer(player, server);
         placeholders.put("server", server);
         player.sendMessage(configManager.getMessage("teleport.to-player-cross-server", placeholders));
     }
@@ -536,31 +540,47 @@ public class GUIListener implements Listener {
             return;
         }
         if (isClickInSlot(slot, menuConfig, "confirm")) {
-            if (isBan365) {
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "ban " + record.getReportedName() + " 365d volunteer:behaviour");
-            } else if (isBan3650) {
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "ban " + record.getReportedName() + " 3650d volunteer:behaviour");
-            } else {
-                ReasonConfig reason = configManager.getReason(reasonId);
-                executePunish(record.getReportedName(), reason);
-            }
-            reportManager.processReport(record.getId(),
-                    player.getUniqueId().toString(),
-                    player.getName(),
-                    reasonId,
-                    reasonName);
-            Map<String, String> placeholders = new HashMap<>();
-            placeholders.put("reportID", String.valueOf(record.getId()));
-            placeholders.put("realReason", reasonName);
-            player.sendMessage(configManager.getMessage("process", placeholders));
-            plugin.getVolunteerManager().restoreAfterProcess(player);
-            plugin.getDatabaseManager().asyncRun(() -> {
-                int remaining = reportManager.getPendingReportCount();
-                if (remaining > 0) {
+            final String staffUuid = player.getUniqueId().toString();
+            final String staffName = player.getName();
+            reportManager.claimForProcess(record.getId(), record.getReportedUuid(), record.getReportType(), staffUuid, staffName, claimed -> {
+                if (!claimed) {
+                    player.sendMessage(configManager.getMessage("gui.report-already-processed"));
                     guiManager.openPanelGUI(player, 1);
-                } else {
-                    Bukkit.getScheduler().runTask(plugin, player::closeInventory);
+                    return;
                 }
+                try {
+                    if (isBan365) {
+                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "ban " + record.getReportedName() + " 365d volunteer:behaviour");
+                    } else if (isBan3650) {
+                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "ban " + record.getReportedName() + " 3650d volunteer:behaviour");
+                    } else {
+                        ReasonConfig reason = configManager.getReason(reasonId);
+                        executePunish(record.getReportedName(), reason);
+                    }
+                } catch (Exception e) {
+                    plugin.getLogger().warning("处理举报时执行处罚失败 -> " + e.getMessage());
+                    player.sendMessage(configManager.getMessage("gui.process-fail"));
+                    return;
+                }
+                reportManager.finishProcess(record.getId(), staffUuid, staffName, reasonId, reasonName, ok -> {
+                    if (!ok) {
+                        player.sendMessage(configManager.getMessage("gui.process-fail"));
+                        return;
+                    }
+                    Map<String, String> placeholders = new HashMap<>();
+                    placeholders.put("reportID", String.valueOf(record.getId()));
+                    placeholders.put("realReason", reasonName);
+                    player.sendMessage(configManager.getMessage("process", placeholders));
+                    plugin.getVolunteerManager().restoreAfterProcess(player);
+                    plugin.getDatabaseManager().asyncRun(() -> {
+                        int remaining = reportManager.getPendingReportCount();
+                        if (remaining > 0) {
+                            guiManager.openPanelGUI(player, 1);
+                        } else {
+                            Bukkit.getScheduler().runTask(plugin, player::closeInventory);
+                        }
+                    });
+                });
             });
         }
     }
@@ -569,28 +589,32 @@ public class GUIListener implements Listener {
         Player reported = Bukkit.getPlayerExact(reportedName);
         for (String cmd : reason.getPunish()) {
             cmd = cmd.replace("{reported}", reportedName);
-            if (cmd.startsWith("[CONSOLE] ")) {
-                String command = cmd.substring("[CONSOLE] ".length());
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
-            } else if (cmd.startsWith("[COMMAND] ")) {
-                if (reported == null || !reported.isOnline()) continue;
-                String command = cmd.substring("[COMMAND] ".length());
-                boolean wasOp = reported.isOp();
-                try {
-                    reported.setOp(true);
+            try {
+                if (cmd.startsWith("[CONSOLE] ")) {
+                    String command = cmd.substring("[CONSOLE] ".length());
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+                } else if (cmd.startsWith("[COMMAND] ")) {
+                    if (reported == null || !reported.isOnline()) continue;
+                    String command = cmd.substring("[COMMAND] ".length());
+                    boolean wasOp = reported.isOp();
+                    try {
+                        reported.setOp(true);
+                        reported.performCommand(command);
+                    } finally {
+                        reported.setOp(wasOp);
+                    }
+                } else if (cmd.startsWith("[CMD] ")) {
+                    if (reported == null || !reported.isOnline()) continue;
+                    String command = cmd.substring("[CMD] ".length());
                     reported.performCommand(command);
-                } finally {
-                    reported.setOp(wasOp);
+                } else if (cmd.startsWith("[MESSAGE] ")) {
+                    if (reported != null && reported.isOnline()) {
+                        reported.sendMessage(ChatColor.translateAlternateColorCodes('&', 
+                                cmd.substring("[MESSAGE] ".length())));
+                    }
                 }
-            } else if (cmd.startsWith("[CMD] ")) {
-                if (reported == null || !reported.isOnline()) continue;
-                String command = cmd.substring("[CMD] ".length());
-                reported.performCommand(command);
-            } else if (cmd.startsWith("[MESSAGE] ")) {
-                if (reported != null && reported.isOnline()) {
-                    reported.sendMessage(ChatColor.translateAlternateColorCodes('&', 
-                            cmd.substring("[MESSAGE] ".length())));
-                }
+            } catch (Exception e) {
+                plugin.getLogger().warning("执行处罚命令失败 -> " + cmd + " : " + e.getMessage());
             }
         }
     }

@@ -16,6 +16,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public class TeleportManager {
     private final AerReport plugin;
@@ -30,25 +31,45 @@ public class TeleportManager {
     public void createTeleportRequest(String staffUuid, String targetUuid, String targetName,
                                      String targetServer, double x, double y, double z, 
                                      String world, String teleportType, boolean isSameServer) {
+        createTeleportRequest(staffUuid, targetUuid, targetName, targetServer, x, y, z, world, teleportType, isSameServer, null);
+    }
+
+    public void createTeleportRequest(String staffUuid, String targetUuid, String targetName,
+                                     String targetServer, double x, double y, double z,
+                                     String world, String teleportType, boolean isSameServer, Runnable afterSave) {
         long time = System.currentTimeMillis();
         String sql = "INSERT INTO " + db.getTablePrefix() + "teleport " +
                 "(staff_uuid, target_uuid, target_name, target_server, target_x, target_y, target_z, " +
                 "target_world, teleport_type, created_time, processed) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         db.asyncRun(() -> {
+            boolean success = true;
             try {
                 db.update(sql, staffUuid, targetUuid, targetName, targetServer, x, y, z, world, teleportType, time, false);
             } catch (SQLException e) {
+                success = false;
                 plugin.getLogger().severe("创建传送请求失败 -> " + e.getMessage());
             }
+            final boolean saved = success;
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!plugin.isEnabled()) return;
+                if (!saved) {
+                    Player staff = plugin.getServer().getPlayer(UUID.fromString(staffUuid));
+                    if (staff != null && staff.isOnline()) {
+                        staff.sendMessage(plugin.getConfigManager().getMessage("teleport.fail"));
+                    }
+                    return;
+                }
+                if (!isSameServer) {
+                    Player staff = plugin.getServer().getPlayer(UUID.fromString(staffUuid));
+                    if (staff != null && staff.isOnline()) {
+                        saveAndSetSpectatorMode(staff);
+                        executeTeleportCommands(staff, targetName);
+                    }
+                }
+                if (afterSave != null) afterSave.run();
+            });
         });
-        if (!isSameServer) {
-            Player staff = plugin.getServer().getPlayer(UUID.fromString(staffUuid));
-            if (staff != null && staff.isOnline()) {
-                saveAndSetSpectatorMode(staff);
-                executeTeleportCommands(staff, targetName);
-            }
-        }
     }
     
     public void saveAndSetSpectatorMode(Player player) {
@@ -68,11 +89,12 @@ public class TeleportManager {
     }
 
     public void checkAndProcessTeleportRequest(UUID staffUuid) {
-        TeleportRequest request = getPendingRequest(staffUuid.toString());
-        if (request != null) {
-            processTeleportRequest(request);
-            markRequestProcessed(request.getId());
-        }
+        getPendingRequestAsync(staffUuid, request -> {
+            if (request != null) {
+                processTeleportRequest(request);
+                markRequestProcessed(request.getId());
+            }
+        });
     }
 
     private TeleportRequest getPendingRequest(String staffUuid) {
@@ -91,12 +113,21 @@ public class TeleportManager {
         return null;
     }
 
+    public void getPendingRequestAsync(UUID staffUuid, Consumer<TeleportRequest> callback) {
+        db.asyncRun(() -> {
+            TeleportRequest request = getPendingRequest(staffUuid.toString());
+            if (!plugin.isEnabled()) return;
+            Bukkit.getScheduler().runTask(plugin, () -> callback.accept(request));
+        });
+    }
+
     public void processTeleportRequest(Player player) {
-        TeleportRequest request = getPendingRequest(player.getUniqueId().toString());
-        if (request != null) {
-            processTeleportRequest(request);
-            markRequestProcessed(request.getId());
-        }
+        getPendingRequestAsync(player.getUniqueId(), request -> {
+            if (request != null) {
+                processTeleportRequest(request);
+                markRequestProcessed(request.getId());
+            }
+        });
     }
 
     private void processTeleportRequest(TeleportRequest request) {

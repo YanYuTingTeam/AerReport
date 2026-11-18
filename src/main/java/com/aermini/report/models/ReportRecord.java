@@ -38,10 +38,10 @@ public class ReportRecord {
     private int reportCount; // 此前被举报次数
     private int reportCounts; // 总
     // 合并组字段: 同 reported+report_type 的 pending/processing 合并展示时填充
-    private String mergedReporterNames;
-    private String mergedReasonNames;
-    private int mergedCount;
-    private String mergedReportIds;
+    private volatile String mergedReporterNames;
+    private volatile String mergedReasonNames;
+    private volatile int mergedCount;
+    private volatile String mergedReportIds;
 
     public ReportRecord() {}
     public static ReportRecord fromResultSet(ResultSet rs) throws SQLException {

@@ -14,10 +14,13 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerToggleFlightEvent;
 
 import com.aermini.report.AerReport;
+import com.aermini.report.utils.RedisKeys;
 
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
+
+import redis.clients.jedis.params.SetParams;
 
 public class ChatListener implements Listener {
     private final AerReport plugin;
@@ -54,6 +57,16 @@ public class ChatListener implements Listener {
                 plugin.getServerName(),
                 true
         );
+
+        String rawServer = plugin.getServerName();
+        final String serverName = (rawServer == null || rawServer.trim().isEmpty()) ? "unknown" : rawServer;
+        final java.util.UUID joinUuid = player.getUniqueId();
+        final String joinName = player.getName();
+        plugin.getDatabaseManager().asyncRun(() -> plugin.getRedisManager().run(j -> {
+            j.set(RedisKeys.online(joinUuid), serverName, SetParams.setParams().ex(90));
+            j.hset(RedisKeys.player(joinUuid), "name", joinName);
+            j.hset(RedisKeys.player(joinUuid), "server", serverName);
+        }));
 
         plugin.getVolunteerManager().hidePatrolsFrom(player);
 
@@ -140,5 +153,9 @@ public class ChatListener implements Listener {
         plugin.getReportManager().cleanupPlayerData(uuid);
         plugin.getGUIManager().removeSelectedPlayer(uuid);
         plugin.getGUIManager().removePanelCache(uuid);
+        plugin.getGUIManager().clearPlayerServerCache(uuid);
+
+        plugin.getDatabaseManager().asyncRun(() ->
+                plugin.getRedisManager().run(j -> j.del(RedisKeys.online(uuid))));
     }
 }

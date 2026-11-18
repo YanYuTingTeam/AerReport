@@ -55,6 +55,7 @@ public class DatabaseManager {
         config.setValidationTimeout(5000);
         config.setLeakDetectionThreshold(60000);
         config.setPoolName("AerReport-Pool");
+        config.setConnectionInitSql("SET SESSION group_concat_max_len=32768");
         config.setConnectionTestQuery("SELECT 1");
         try {
             dataSource = new HikariDataSource(config);
@@ -201,6 +202,10 @@ public class DatabaseManager {
         return dataSource.getConnection();
     }
 
+    public boolean isAvailable() {
+        return dataSource != null && !dataSource.isClosed();
+    }
+
     public void close() {
         dbExecutor.shutdown();
         try {
@@ -345,5 +350,19 @@ public class DatabaseManager {
             plugin.getLogger().severe("检查志愿者巡查模式失败 -> " + e.getMessage());
         }
         return false;
+    }
+
+    public Boolean queryVolunteerPatrolOrNull(UUID playerUuid) {
+        String sql = "SELECT patrol FROM " + tablePrefix + "volunteer_state WHERE player_uuid = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, playerUuid.toString());
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return rs.getBoolean("patrol");
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().warning("查询志愿者巡查模式失败 -> " + e.getMessage());
+        }
+        return null;
     }
 }

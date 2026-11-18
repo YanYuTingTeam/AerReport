@@ -32,17 +32,37 @@ public class ReportCommand implements CommandExecutor {
             player.sendMessage(msg);
             return true;
         }
+        if (plugin.getRedisManager().isAvailable()) {
+            final String cooldownMsg = plugin.getConfigManager().getMessage("cooldown");
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                final boolean global = reportManager.isInCooldownGlobal(player.getUniqueId());
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (!player.isOnline()) return;
+                    if (global) {
+                        player.sendMessage(cooldownMsg);
+                        return;
+                    }
+                    openReport(player, args);
+                });
+            });
+            return true;
+        }
+        openReport(player, args);
+        return true;
+    }
+
+    private void openReport(Player player, String[] args) {
         if (args.length == 0) {
             guiManager.openReportsGUI(player, 1);
-            return true;
+            return;
         }
         String targetName = args[0];
         Player target = Bukkit.getPlayerExact(targetName);
         if (target == null) {
             player.sendMessage(plugin.getConfigManager().getMessage("player_offline"));
-            return true;
+            return;
         }
         guiManager.openReportReasonGUI(player, targetName);
-        return true;
     }
 }

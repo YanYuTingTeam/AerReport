@@ -490,3 +490,17 @@ reasons:
 
 spec:
   - '[COMMAND] gamemode spectator'
+
+redis:
+  enabled: false
+  host: 127.0.0.1
+  port: 6379
+  password: ""
+  database: 0
+  timeout: 2000
+  key-prefix: "aerreport:"
+  pool:
+    max-total: 8
+    max-idle: 8
+    min-idle: 1
+    max-wait: 2000

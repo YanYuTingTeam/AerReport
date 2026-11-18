@@ -1,6 +1,7 @@
 package com.aermini.report.managers;
 
 import com.aermini.report.AerReport;
+import com.aermini.report.utils.RedisKeys;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.bukkit.Bukkit;
@@ -71,6 +72,24 @@ public class PlayerDataManager {
     }
 
     public void getPlayerServer(UUID playerUuid, Consumer<String> callback) {
+        if (plugin.getRedisManager() != null && plugin.getRedisManager().isAvailable()) {
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                String server = plugin.getRedisManager().call(j -> j.get(RedisKeys.online(playerUuid)), null);
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (server != null && !server.isEmpty() && !"unknown".equals(server)) {
+                        callback.accept(server);
+                        return;
+                    }
+                    getPlayerServerByChannel(playerUuid, callback);
+                });
+            });
+            return;
+        }
+        getPlayerServerByChannel(playerUuid, callback);
+    }
+
+    private void getPlayerServerByChannel(UUID playerUuid, Consumer<String> callback) {
         List<Consumer<String>> callbacks = serverCallbacks.computeIfAbsent(playerUuid,
                 k -> Collections.synchronizedList(new ArrayList<>()));
         boolean needSend;

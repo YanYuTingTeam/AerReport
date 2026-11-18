@@ -29,6 +29,7 @@ public class GUIManager {
     // 面板渲染时缓存当页记录, 点击时不用再查库
     private final java.util.concurrent.ConcurrentHashMap<java.util.UUID, java.util.Map<Integer, ReportRecord>> panelCache = new java.util.concurrent.ConcurrentHashMap<>();
     private final java.util.concurrent.ConcurrentHashMap<String, String> playerServerCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, Long> playerServerCacheTime = new java.util.concurrent.ConcurrentHashMap<>();
 
     public GUIManager(AerReport plugin) {
         this.plugin = plugin;
@@ -66,11 +67,25 @@ public class GUIManager {
     }
 
     public String getCachedPlayerServer(String uuid) {
+        Long cacheTime = playerServerCacheTime.get(uuid);
+        if (cacheTime == null || System.currentTimeMillis() - cacheTime > 10000L) return null;
         return playerServerCache.get(uuid);
     }
 
     public void putCachedPlayerServer(String uuid, String server) {
-        if (server != null) playerServerCache.put(uuid, server);
+        if (server != null) {
+            playerServerCache.put(uuid, server);
+            playerServerCacheTime.put(uuid, System.currentTimeMillis());
+        } else {
+            playerServerCache.remove(uuid);
+            playerServerCacheTime.remove(uuid);
+        }
+    }
+
+    public void clearPlayerServerCache(java.util.UUID uuid) {
+        if (uuid == null) return;
+        playerServerCache.remove(uuid.toString());
+        playerServerCacheTime.remove(uuid.toString());
     }
 
     private String buildOnlineStatus(String name, String currentServer) {
@@ -170,6 +185,8 @@ public class GUIManager {
         int pageSize = menuConfig.getSlots("player").size();
         int totalPages = (int) Math.ceil((double) onlinePlayers.size() / pageSize);
         if (totalPages == 0) totalPages = 1;
+        if (page < 1) page = 1;
+        if (page > totalPages) page = totalPages;
         int startIndex = (page - 1) * pageSize;
         List<Integer> slots = menuConfig.getSlots("player");
         for (int i = 0; i < slots.size() && startIndex + i < onlinePlayers.size(); i++) {
@@ -212,6 +229,17 @@ public class GUIManager {
         if (reportType != null) reportManager.setStaffReportType(player.getUniqueId(), reportType);
         final String type = reportType != null ? reportType : reportManager.getStaffReportType(player.getUniqueId());
         plugin.getDatabaseManager().asyncRun(() -> {
+        int pageSize = menuConfig.getSlots("report").size();
+        List<ReportRecord> reports = reportManager.getPendingReportsMerged(page, pageSize, type);
+        int totalReports = reportManager.getPendingMergedCount(type);
+        int totalPages = (int) Math.ceil((double) totalReports / pageSize);
+        if (totalPages == 0) totalPages = 1;
+        java.util.Map<Integer, ReportRecord> pageCache = new java.util.HashMap<>();
+        for (ReportRecord record : reports) {
+            pageCache.put(record.getId(), record);
+        }
+        final boolean patrol = plugin.getVolunteerManager().syncPatrolFromDb(player);
+        Bukkit.getScheduler().runTask(plugin, () -> {
         String title = menuConfig.getTitle();
         Inventory inv = Bukkit.createInventory(null, menuConfig.getSlot(), title);
         int mainSlot = getSlot(menuConfig, "main");
@@ -235,16 +263,9 @@ public class GUIManager {
             inv.setItem(chatSlot, chatItem);
         }
 
-        int pageSize = menuConfig.getSlots("report").size();
-        List<ReportRecord> reports = reportManager.getPendingReportsMerged(page, pageSize, type);
-        int totalReports = reportManager.getPendingMergedCount(type);
-        int totalPages = (int) Math.ceil((double) totalReports / pageSize);
-        if (totalPages == 0) totalPages = 1;
         List<Integer> slots = menuConfig.getSlots("report");
-        java.util.Map<Integer, ReportRecord> pageCache = new java.util.HashMap<>();
         for (int i = 0; i < reports.size() && i < slots.size(); i++) {
             ReportRecord record = reports.get(i);
-            pageCache.put(record.getId(), record);
             ItemStack item = createReportItem(record, menuConfig, player);
             inv.setItem(slots.get(i), item);
         }
@@ -279,7 +300,6 @@ public class GUIManager {
         openInvSync(player, inv);
 
         final java.util.UUID pUuid = player.getUniqueId();
-        final boolean patrol = plugin.getVolunteerManager().syncPatrolFromDb(player);
         Bukkit.getScheduler().runTask(plugin, () -> {
             Player p = Bukkit.getPlayer(pUuid);
             if (p == null || !p.isOnline()) return;
@@ -297,6 +317,7 @@ public class GUIManager {
                                 ? menuConfig.getLore(volunItem) : new ArrayList<>());
                 topInv.setItem(volunSlot, volunStack);
             }
+        });
         });
         });
     }
@@ -332,28 +353,54 @@ public class GUIManager {
         if (menuConfig == null) return;
         plugin.getDatabaseManager().asyncRun(() -> {
             reportManager.fillMergedInfo(record);
-            java.util.concurrent.CompletableFuture<String> reporterFuture = new java.util.concurrent.CompletableFuture<>();
-            java.util.concurrent.CompletableFuture<String> reportedFuture = new java.util.concurrent.CompletableFuture<>();
-            plugin.getPlayerDataManager().getPlayerServer(java.util.UUID.fromString(record.getReporterUuid()), reporterFuture::complete);
-            plugin.getPlayerDataManager().getPlayerServer(java.util.UUID.fromString(record.getReportedUuid()), reportedFuture::complete);
-            String reporterServer = null, reportedServer = null;
-            try { reporterServer = reporterFuture.get(3, java.util.concurrent.TimeUnit.SECONDS); } catch (Exception ignore) {}
-            try { reportedServer = reportedFuture.get(3, java.util.concurrent.TimeUnit.SECONDS); } catch (Exception ignore) {}
-            putCachedPlayerServer(record.getReporterUuid(), reporterServer);
-            putCachedPlayerServer(record.getReportedUuid(), reportedServer);
             PlayerInfo reporterInfo = reportManager.getOrCreatePlayerInfo(
                     java.util.UUID.fromString(record.getReporterUuid()), record.getReporterName());
             PlayerInfo reportedInfo = reportManager.getOrCreatePlayerInfo(
                     java.util.UUID.fromString(record.getReportedUuid()), record.getReportedName());
-            Inventory inv = buildAdminInv(menuConfig, record,
-                    reporterInfo != null ? String.valueOf(reporterInfo.getReportCount()) : "0",
-                    buildOnlineStatus(record.getReporterName(), reporterServer),
-                    buildOnlineStatus(record.getReportedName(), reportedServer),
-                    reporterServer != null ? reporterServer : "未知",
-                    reportedServer != null ? reportedServer : "未知");
-            reportManager.setSelectedReport(player.getUniqueId(), record);
-            openInvSync(player, inv);
+            queryPlayerServers(java.util.UUID.fromString(record.getReporterUuid()),
+                    java.util.UUID.fromString(record.getReportedUuid()), (reporterServer, reportedServer) -> {
+                putCachedPlayerServer(record.getReporterUuid(), reporterServer);
+                putCachedPlayerServer(record.getReportedUuid(), reportedServer);
+                Inventory inv = buildAdminInv(menuConfig, record,
+                        reporterInfo != null ? String.valueOf(reporterInfo.getReportCount()) : "0",
+                        buildOnlineStatus(record.getReporterName(), reporterServer),
+                        buildOnlineStatus(record.getReportedName(), reportedServer),
+                        reporterServer != null ? reporterServer : "未知",
+                        reportedServer != null ? reportedServer : "未知");
+                reportManager.setSelectedReport(player.getUniqueId(), record);
+                openInvSync(player, inv);
+            });
         });
+    }
+
+    // 并发查两个玩家所在子服, 两个都到齐或 3 秒兜底后回主线程回调, 不阻塞数据库线程
+    private void queryPlayerServers(java.util.UUID reporterUuid, java.util.UUID reportedUuid,
+                                    java.util.function.BiConsumer<String, String> callback) {
+        final java.util.concurrent.atomic.AtomicInteger waiting = new java.util.concurrent.atomic.AtomicInteger(2);
+        final java.util.concurrent.atomic.AtomicBoolean done = new java.util.concurrent.atomic.AtomicBoolean(false);
+        final java.util.concurrent.atomic.AtomicReference<String> reporterServer = new java.util.concurrent.atomic.AtomicReference<>();
+        final java.util.concurrent.atomic.AtomicReference<String> reportedServer = new java.util.concurrent.atomic.AtomicReference<>();
+        plugin.getPlayerDataManager().getPlayerServer(reporterUuid, server -> {
+            reporterServer.set(server);
+            if (waiting.decrementAndGet() == 0) {
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (done.compareAndSet(false, true)) callback.accept(reporterServer.get(), reportedServer.get());
+                });
+            }
+        });
+        plugin.getPlayerDataManager().getPlayerServer(reportedUuid, server -> {
+            reportedServer.set(server);
+            if (waiting.decrementAndGet() == 0) {
+                if (!plugin.isEnabled()) return;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (done.compareAndSet(false, true)) callback.accept(reporterServer.get(), reportedServer.get());
+                });
+            }
+        });
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (done.compareAndSet(false, true)) callback.accept(reporterServer.get(), reportedServer.get());
+        }, 60L);
     }
 
     // 面板缓存命中时主线程直接开, 玩家信息异步查完再回填两个头颅
@@ -366,30 +413,24 @@ public class GUIManager {
         plugin.getDatabaseManager().asyncRun(() -> {
             // 补充合并信息后回填 player 头颅(显示合并组举报人/理由/数量)
             reportManager.fillMergedInfo(record);
-            java.util.concurrent.CompletableFuture<String> reporterFuture = new java.util.concurrent.CompletableFuture<>();
-            java.util.concurrent.CompletableFuture<String> reportedFuture = new java.util.concurrent.CompletableFuture<>();
-            plugin.getPlayerDataManager().getPlayerServer(java.util.UUID.fromString(record.getReporterUuid()), reporterFuture::complete);
-            plugin.getPlayerDataManager().getPlayerServer(java.util.UUID.fromString(record.getReportedUuid()), reportedFuture::complete);
-            String reporterServer = null, reportedServer = null;
-            try { reporterServer = reporterFuture.get(3, java.util.concurrent.TimeUnit.SECONDS); } catch (Exception ignore) {}
-            try { reportedServer = reportedFuture.get(3, java.util.concurrent.TimeUnit.SECONDS); } catch (Exception ignore) {}
-            putCachedPlayerServer(record.getReporterUuid(), reporterServer);
-            putCachedPlayerServer(record.getReportedUuid(), reportedServer);
             PlayerInfo reporterInfo = reportManager.getOrCreatePlayerInfo(
                     java.util.UUID.fromString(record.getReporterUuid()), record.getReporterName());
             PlayerInfo reportedInfo = reportManager.getOrCreatePlayerInfo(
                     java.util.UUID.fromString(record.getReportedUuid()), record.getReportedName());
-            ItemStack reporterHead = buildReporterHead(menuConfig, record,
-                    reporterInfo != null ? String.valueOf(reporterInfo.getReportCount()) : "0",
-                    buildOnlineStatus(record.getReporterName(), reporterServer),
-                    reporterServer != null ? reporterServer : "未知");
-            ItemStack reportedHead = buildReportedHead(menuConfig, record,
-                    buildOnlineStatus(record.getReportedName(), reportedServer),
-                    reportedServer != null ? reportedServer : "未知");
-            // 重新构造 player 头颅(用合并字段)
-            ItemStack playerHead = buildAdminPlayerHead(menuConfig, record);
-            String title = menuConfig.getTitle().replace("{reported}", record.getReportedName());
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            queryPlayerServers(java.util.UUID.fromString(record.getReporterUuid()),
+                    java.util.UUID.fromString(record.getReportedUuid()), (reporterServer, reportedServer) -> {
+                putCachedPlayerServer(record.getReporterUuid(), reporterServer);
+                putCachedPlayerServer(record.getReportedUuid(), reportedServer);
+                ItemStack reporterHead = buildReporterHead(menuConfig, record,
+                        reporterInfo != null ? String.valueOf(reporterInfo.getReportCount()) : "0",
+                        buildOnlineStatus(record.getReporterName(), reporterServer),
+                        reporterServer != null ? reporterServer : "未知");
+                ItemStack reportedHead = buildReportedHead(menuConfig, record,
+                        buildOnlineStatus(record.getReportedName(), reportedServer),
+                        reportedServer != null ? reportedServer : "未知");
+                // 重新构造 player 头颅(用合并字段)
+                ItemStack playerHead = buildAdminPlayerHead(menuConfig, record);
+                String title = menuConfig.getTitle().replace("{reported}", record.getReportedName());
                 if (!player.isOnline()) return;
                 if (!player.getOpenInventory().getTitle().equals(title)) return; // 已切界面就不回填
                 Inventory top = player.getOpenInventory().getTopInventory();

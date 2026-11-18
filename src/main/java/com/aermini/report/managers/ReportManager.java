@@ -7,6 +7,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -17,6 +18,8 @@ import com.aermini.report.database.DatabaseManager;
 import com.aermini.report.managers.ConfigManager.ReasonConfig;
 import com.aermini.report.models.PlayerInfo;
 import com.aermini.report.models.ReportRecord;
+import com.aermini.report.utils.RedisKeys;
+import redis.clients.jedis.params.SetParams;
 
 public class ReportManager {
 
@@ -44,8 +47,24 @@ public class ReportManager {
         return System.currentTimeMillis() - lastTime < cooldown;
     }
 
+    public boolean isInCooldownGlobal(UUID uuid) {
+        if (isInCooldown(uuid)) return true;
+        try {
+            return Boolean.TRUE.equals(plugin.getRedisManager().call(j -> j.exists(RedisKeys.cool(uuid)), false));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public void setCooldown(UUID uuid) {
         cooldowns.put(uuid, System.currentTimeMillis());
+        try {
+            long cooldown = plugin.getConfigManager().getCooldown();
+            if (cooldown <= 0) return;
+            plugin.getRedisManager().run(j -> j.set(RedisKeys.cool(uuid), "1",
+                    SetParams.setParams().px(cooldown)));
+        } catch (Exception ignored) {
+        }
     }
 
     public long getRemainingCooldown(UUID uuid) {
@@ -376,26 +395,134 @@ public class ReportManager {
         return null;
     }
 
-    public void processReport(int reportId, String staffUuid, String staffName, String reasonId, String reasonName) {
-        long processTime = System.currentTimeMillis();
-        String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'processed', " +
-                "processed_by = ?, processed_by_name = ?, processed_time = ?, " +
-                "processed_reason_id = ?, processed_reason_name = ?, " +
-                "ban_id = ?, processing_by = NULL WHERE id = ?";
+    public void claimForProcess(int reportId, String staffUuid, String staffName, Consumer<Boolean> callback) {
         db.asyncRun(() -> {
             ReportRecord record = getReport(reportId);
-            String banId = record != null ? getLatestBanId(record.getReportedUuid(), processTime) : null; // 取封禁编号
+            if (record == null) {
+                callbackToMain(callback, false);
+                return;
+            }
+            claimForProcess(reportId, record.getReportedUuid(), record.getReportType(), staffUuid, staffName, callback);
+        });
+    }
+
+    public void claimForProcess(int reportId, String reportedUuid, String reportType, String staffUuid,
+                                String staffName, Consumer<Boolean> callback) {
+        claimGroup(reportId, reportedUuid, reportType, "processed", staffUuid, staffName, callback);
+    }
+
+    public void finishProcess(int reportId, String staffUuid, String staffName, String reasonId,
+                              String reasonName, Consumer<Boolean> callback) {
+        String sql = "UPDATE " + db.getTablePrefix() + "reports SET processed_reason_id = ?, " +
+                "processed_reason_name = ?, ban_id = ? WHERE id = ?";
+        db.asyncRun(() -> {
+            boolean ok = false;
             try {
-                db.update(sql, staffUuid, staffName, processTime, reasonId, reasonName, banId, reportId);
+                ReportRecord record = getReport(reportId);
+                long processTime = record != null && record.getProcessedTime() > 0
+                        ? record.getProcessedTime() : System.currentTimeMillis();
+                String banId = record != null ? getLatestBanId(record.getReportedUuid(), processTime) : null; // 取封禁编号
+                db.update(sql, reasonId, reasonName, banId, reportId);
                 if (record != null) {
                     linkOtherReports(record.getReportedUuid(), record.getReportType(), reportId,
                             staffUuid, staffName, processTime, reasonId, reasonName, banId);
                     logAction(reportId, staffUuid, staffName, "process", record.getReporterUuid(),
                             record.getReportedUuid(), reasonId, null);
                 }
+                ok = true;
             } catch (SQLException e) {
-                plugin.getLogger().severe("处理举报失败 -> " + e.getMessage());
-                e.printStackTrace();
+                plugin.getLogger().warning("完成举报处理失败 -> " + e.getMessage());
+            }
+            callbackToMain(callback, ok);
+        });
+    }
+
+    public void releaseProcessClaim(int reportId, String staffUuid) {
+        String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'pending', " +
+                "processed_by = NULL, processed_by_name = NULL, processed_time = NULL " +
+                "WHERE reported = ? AND report_type = ? AND processed_by = ? AND status = 'processed' " +
+                "AND processed_time = ? AND ban_id IS NULL";
+        db.asyncRun(() -> {
+            ReportRecord record = getReport(reportId);
+            if (record == null) return;
+            try {
+                db.update(sql, record.getReportedUuid(), record.getReportType(), staffUuid, record.getProcessedTime());
+            } catch (SQLException e) {
+                plugin.getLogger().warning("回滚举报处理状态失败 -> " + e.getMessage());
+            }
+        });
+    }
+
+    private void callbackToMain(Consumer<Boolean> callback, boolean result) {
+        if (plugin.isEnabled()) {
+            Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+        }
+    }
+
+    private void claimGroup(int reportId, String reportedUuid, String reportType, String newStatus,
+                            String staffUuid, String staffName, Consumer<Boolean> callback) {
+        long processTime = System.currentTimeMillis();
+        String lockSql = "SELECT status FROM " + db.getTablePrefix() + "reports WHERE id = ? FOR UPDATE";
+        String updateSql = "UPDATE " + db.getTablePrefix() + "reports SET status = ?, " +
+                "processed_by = ?, processed_by_name = ?, processed_time = ?, processing_by = NULL " +
+                "WHERE reported = ? AND report_type = ? AND status IN ('pending', 'processing')";
+        db.asyncRun(() -> {
+            boolean ok = false;
+            try (Connection conn = db.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    boolean clickable = false;
+                    try (PreparedStatement lockStmt = conn.prepareStatement(lockSql)) {
+                        lockStmt.setInt(1, reportId);
+                        try (ResultSet rs = lockStmt.executeQuery()) {
+                            if (rs.next()) {
+                                String status = rs.getString("status");
+                                clickable = "pending".equals(status) || "processing".equals(status);
+                            }
+                        }
+                    }
+                    if (!clickable) {
+                        conn.rollback();
+                        callbackToMain(callback, false);
+                        return;
+                    }
+                    int rows;
+                    try (PreparedStatement updateStmt = conn.prepareStatement(updateSql)) {
+                        updateStmt.setString(1, newStatus);
+                        updateStmt.setString(2, staffUuid);
+                        updateStmt.setString(3, staffName);
+                        updateStmt.setLong(4, processTime);
+                        updateStmt.setString(5, reportedUuid);
+                        updateStmt.setString(6, reportType);
+                        rows = updateStmt.executeUpdate();
+                    }
+                    if (rows >= 1) {
+                        conn.commit();
+                        ok = true;
+                    } else {
+                        conn.rollback();
+                    }
+                } catch (SQLException e) {
+                    try {
+                        conn.rollback();
+                    } catch (SQLException ignored) {}
+                    plugin.getLogger().warning("抢占举报处理失败 -> id=" + reportId + ", " + e.getMessage());
+                } finally {
+                    try {
+                        conn.setAutoCommit(true);
+                    } catch (SQLException ignored) {}
+                }
+            } catch (SQLException e) {
+                plugin.getLogger().warning("抢占举报处理失败 -> id=" + reportId + ", " + e.getMessage());
+            }
+            callbackToMain(callback, ok);
+        });
+    }
+
+    public void processReport(int reportId, String staffUuid, String staffName, String reasonId, String reasonName) {
+        claimForProcess(reportId, staffUuid, staffName, ok -> {
+            if (ok) {
+                finishProcess(reportId, staffUuid, staffName, reasonId, reasonName, result -> {});
             }
         });
     }
@@ -434,21 +561,46 @@ public class ReportManager {
         processReport(reportId, staffUuid, staffName, reasonId, reasonName);
     }
 
-    public void markAsFake(int reportId, String staffUuid, String staffName) {
-        long processTime = System.currentTimeMillis();
-        String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'fake', " +
-                "processed_by = ?, processed_by_name = ?, processed_time = ?, processing_by = NULL WHERE id = ?";
+    public void claimForFake(int reportId, String staffUuid, String staffName, Consumer<Boolean> callback) {
         db.asyncRun(() -> {
+            ReportRecord record = getReport(reportId);
+            if (record == null) {
+                callbackToMain(callback, false);
+                return;
+            }
+            claimForFake(reportId, record.getReportedUuid(), record.getReportType(), staffUuid, staffName, callback);
+        });
+    }
+
+    public void claimForFake(int reportId, String reportedUuid, String reportType, String staffUuid,
+                             String staffName, Consumer<Boolean> callback) {
+        claimGroup(reportId, reportedUuid, reportType, "fake", staffUuid, staffName, callback);
+    }
+
+    public void finishFake(int reportId, String staffUuid, String staffName, Consumer<Boolean> callback) {
+        db.asyncRun(() -> {
+            boolean ok = false;
             try {
-                db.update(sql, staffUuid, staffName, processTime, reportId);
                 ReportRecord record = getReport(reportId);
                 if (record != null) {
-                    logAction(reportId, staffUuid, staffName, "fake", record.getReporterUuid(), 
+                    long processTime = record.getProcessedTime() > 0
+                            ? record.getProcessedTime() : System.currentTimeMillis();
+                    logAction(reportId, staffUuid, staffName, "fake", record.getReporterUuid(),
                             record.getReportedUuid(), "虚假举报", null);
+                    linkGroupReports(record.getReportedUuid(), record.getReportType(), reportId, processTime);
+                    ok = true;
                 }
-            } catch (SQLException e) {
-                plugin.getLogger().severe("判定虚假举报失败 -> " + e.getMessage());
-                e.printStackTrace();
+            } catch (Exception e) {
+                plugin.getLogger().warning("完成虚假举报判定失败 -> " + e.getMessage());
+            }
+            callbackToMain(callback, ok);
+        });
+    }
+
+    public void markAsFake(int reportId, String staffUuid, String staffName) {
+        claimForFake(reportId, staffUuid, staffName, ok -> {
+            if (ok) {
+                finishFake(reportId, staffUuid, staffName, result -> {});
             }
         });
     }
@@ -471,19 +623,21 @@ public class ReportManager {
         });
     }
 
-    private void linkOtherReports(String reportedUuid, String reportType, int reportId,
-                                  String staffUuid, String staffName, long processTime,
-                                  String reasonId, String reasonName, String banId) {
-        String sql = "UPDATE " + db.getTablePrefix() + "reports SET linked_report_id = ?, " +
-                "status = 'processed', processed_by = ?, processed_by_name = ?, processed_time = ?, " +
-                "processed_reason_id = ?, processed_reason_name = ?, ban_id = ?, processing_by = NULL " +
-                "WHERE reported = ? AND report_type = ? AND status IN ('pending', 'processing') AND id != ?";
+    private void linkGroupReports(String reportedUuid, String reportType, int reportId, long processTime) {
+        String sql = "UPDATE " + db.getTablePrefix() + "reports SET linked_report_id = ? " +
+                "WHERE reported = ? AND report_type = ? AND id != ? AND processed_time = ?";
         try {
-            db.update(sql, reportId, staffUuid, staffName, processTime, reasonId, reasonName, banId,
-                    reportedUuid, reportType, reportId);
+            db.update(sql, reportId, reportedUuid, reportType, reportId, processTime);
         } catch (SQLException e) {
             plugin.getLogger().severe("关联其他举报失败 -> " + e.getMessage());
         }
+    }
+
+    // 组内状态与处理人已由 claim 批量写入, 这里只补 linked_report_id
+    private void linkOtherReports(String reportedUuid, String reportType, int reportId,
+                                  String staffUuid, String staffName, long processTime,
+                                  String reasonId, String reasonName, String banId) {
+        linkGroupReports(reportedUuid, reportType, reportId, processTime);
     }
 
     public void asyncFullResetAllData(Player player) {
@@ -515,28 +669,35 @@ public class ReportManager {
 
     public PlayerInfo getOrCreatePlayerInfo(UUID uuid, String name) {
         String sql = "SELECT * FROM " + db.getTablePrefix() + "players WHERE uuid = ?";
+        PlayerInfo existing = null;
         try (Connection conn = db.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, uuid.toString());
             try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) return PlayerInfo.fromResultSet(rs);
+                if (rs.next()) existing = PlayerInfo.fromResultSet(rs);
             }
-            String insertSql = "INSERT INTO " + db.getTablePrefix() + "players " +
-                    "(uuid, name, current_server, last_online, is_online) VALUES (?, ?, ?, ?, ?)";
-            db.update(insertSql, uuid.toString(), name, plugin.getServerName(), 
-                    System.currentTimeMillis(), true);
-            PlayerInfo info = new PlayerInfo();
-            info.setUuid(uuid.toString());
-            info.setName(name);
-            info.setReportCount(0);
-            info.setReportedCount(0);
-            info.setCurrentServer(plugin.getServerName());
-            info.setOnline(true);
-            return info;
         } catch (SQLException e) {
             plugin.getLogger().severe("获取玩家信息失败 -> " + e.getMessage());
+            return null;
         }
-        return null;
+        if (existing != null) return existing;
+        String insertSql = "INSERT INTO " + db.getTablePrefix() + "players " +
+                "(uuid, name, current_server, last_online, is_online) VALUES (?, ?, ?, ?, ?)";
+        try {
+            db.update(insertSql, uuid.toString(), name, plugin.getServerName(),
+                    System.currentTimeMillis(), true);
+        } catch (SQLException e) {
+            plugin.getLogger().severe("获取玩家信息失败 -> " + e.getMessage());
+            return null;
+        }
+        PlayerInfo info = new PlayerInfo();
+        info.setUuid(uuid.toString());
+        info.setName(name);
+        info.setReportCount(0);
+        info.setReportedCount(0);
+        info.setCurrentServer(plugin.getServerName());
+        info.setOnline(true);
+        return info;
     }
 
     public void updatePlayerInfo(UUID uuid, String name, String server, boolean online) {
@@ -581,8 +742,9 @@ public class ReportManager {
 
     public int resetAllReports() {
         String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'pending', " +
-                "processing_by = NULL, processing_time = NULL, processed_by = NULL, " +
-                "processed_time = NULL, processed_reason_id = NULL";
+                "processing_by = NULL, processing_time = NULL, processed_by = NULL, processed_by_name = NULL, " +
+                "processed_time = NULL, processed_reason_id = NULL, processed_reason_name = NULL, " +
+                "ban_id = NULL, linked_report_id = NULL WHERE ban_id IS NULL";
         try {
             return db.update(sql);
         } catch (SQLException e) {

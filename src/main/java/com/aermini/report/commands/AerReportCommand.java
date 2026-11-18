@@ -1,6 +1,7 @@
 package com.aermini.report.commands;
 
 import com.aermini.report.AerReport;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -73,10 +74,15 @@ public class AerReportCommand implements CommandExecutor {
     }
 
     private void resetAll(CommandSender sender) {
-        int count = plugin.getReportManager().resetAllReports();
-        Map<String, String> placeholders = new HashMap<>();
-        placeholders.put("count", String.valueOf(count));
-        sender.sendMessage(plugin.getConfigManager().getMessage("admin.reset-all-success", placeholders));
+        plugin.getDatabaseManager().asyncRun(() -> {
+            int count = plugin.getReportManager().resetAllReports();
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!plugin.isEnabled()) return;
+                Map<String, String> placeholders = new HashMap<>();
+                placeholders.put("count", String.valueOf(count));
+                sender.sendMessage(plugin.getConfigManager().getMessage("admin.reset-all-success", placeholders));
+            });
+        });
     }
 
     private void handleFullReset(CommandSender sender) {
@@ -96,12 +102,19 @@ public class AerReportCommand implements CommandExecutor {
         Map<String, String> placeholders = new HashMap<>();
         placeholders.put("version", plugin.getDescription().getVersion());
         placeholders.put("author", plugin.getDescription().getAuthors().toString());
-        placeholders.put("count", String.valueOf(plugin.getReportManager().getPendingReportCount()));
         sender.sendMessage(plugin.getConfigManager().getMessage("admin.info-header"));
         sender.sendMessage(plugin.getConfigManager().getMessage("admin.info-version", placeholders));
         sender.sendMessage(plugin.getConfigManager().getMessage("admin.info-author", placeholders));
-        sender.sendMessage(plugin.getConfigManager().getMessage("admin.info-pending", placeholders));
-        sender.sendMessage(plugin.getConfigManager().getMessage("admin.info-footer"));
+        plugin.getDatabaseManager().asyncRun(() -> {
+            int count = plugin.getReportManager().getPendingReportCount();
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!plugin.isEnabled()) return;
+                Map<String, String> countPlaceholders = new HashMap<>();
+                countPlaceholders.put("count", String.valueOf(count));
+                sender.sendMessage(plugin.getConfigManager().getMessage("admin.info-pending", countPlaceholders));
+                sender.sendMessage(plugin.getConfigManager().getMessage("admin.info-footer"));
+            });
+        });
     }
     
     private void sendHelp(CommandSender sender) {
