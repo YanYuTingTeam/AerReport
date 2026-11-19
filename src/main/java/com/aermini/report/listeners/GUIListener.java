@@ -172,6 +172,12 @@ public class GUIListener implements Listener {
             if (reported == null) return;
             UUID reportedId = reported.getUniqueId();
             plugin.getDatabaseManager().asyncRun(() -> {
+                if (reportManager.isInCooldownGlobal(player.getUniqueId())) {
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        if (player.isOnline()) player.sendMessage(configManager.getMessage("cooldown"));
+                    });
+                    return;
+                }
                 if (!reportManager.canReport(player.getUniqueId().toString(), reportedId.toString())) {
                     Map<String, String> placeholders = new HashMap<>();
                     placeholders.put("player", reportedName);

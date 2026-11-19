@@ -113,16 +113,18 @@ public class GUIManager {
         String title = menuConfig.getTitle();
         Inventory inv = Bukkit.createInventory(null, menuConfig.getSlot(), title);
         List<Player> onlinePlayers = new ArrayList<>(Bukkit.getOnlinePlayers());
-        int pageSize = menuConfig.getSlots("player").size();
+        List<Integer> slots = menuConfig.getSlots("player");
+        int pageSize = slots.size();
         int totalPages = (int) Math.ceil((double) onlinePlayers.size() / pageSize);
         if (totalPages == 0) totalPages = 1;
         int startIndex = (page - 1) * pageSize;
-        List<Integer> slots = menuConfig.getSlots("player");
+        String nameTemplate = menuConfig.getName("player");
+        List<String> playerLore = menuConfig.getLore("player");
+        String headItem = menuConfig.getItem("player");
         for (int i = 0; i < slots.size() && startIndex + i < onlinePlayers.size(); i++) {
             Player target = onlinePlayers.get(startIndex + i);
-            ItemStack item = GUIUtils.createPlayerHead(target.getName(), 
-                    menuConfig.getName("player").replace("{players}", target.getName()),
-                    Arrays.asList(GUIUtils.colorize(menuConfig.getLore("player").get(0))));
+            ItemStack item = GUIUtils.createHead(headItem, target.getName(),
+                    nameTemplate.replace("{players}", target.getName()), playerLore);
             inv.setItem(slots.get(i), item);
         }
         int prevSlot = getSlot(menuConfig, "prev");
@@ -191,7 +193,7 @@ public class GUIManager {
         List<Integer> slots = menuConfig.getSlots("player");
         for (int i = 0; i < slots.size() && startIndex + i < onlinePlayers.size(); i++) {
             Player target = onlinePlayers.get(startIndex + i);
-            ItemStack item = GUIUtils.createPlayerHead(target.getName(), 
+            ItemStack item = GUIUtils.createHead(menuConfig.getItem("player"), target.getName(),
                     menuConfig.getName("player").replace("{players}", target.getName()),
                     Arrays.asList(GUIUtils.colorize("&c点击处罚此玩家")));
             inv.setItem(slots.get(i), item);

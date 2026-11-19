@@ -32,16 +32,31 @@ public class GUIUtils {
         return item;
     }
 
+    public static ItemStack createHead(String itemName, String playerName, String displayName, List<String> lore) {
+        if (itemName != null && itemName.equalsIgnoreCase("STEVE_HEAD")) {
+            ItemStack item = new ItemStack(Material.SKULL_ITEM, 1, (short) SkullType.PLAYER.ordinal());
+            ItemMeta meta = item.getItemMeta();
+            if (displayName != null) meta.setDisplayName(ChatColor.translateAlternateColorCodes('&', displayName));
+            if (lore != null && !lore.isEmpty()) meta.setLore(lore);
+            item.setItemMeta(meta);
+            return item;
+        }
+        if (itemName == null || itemName.isEmpty() || itemName.equalsIgnoreCase("_PLAYERHEAD")) {
+            return createPlayerHead(playerName, displayName, lore);
+        }
+        return createItem(itemName, 1, 0, displayName, lore);
+    }
+
     public static Material parseMaterial(String name) {
         if (name == null || name.isEmpty()) return Material.STONE;
         if (name.equalsIgnoreCase("_PLAYERHEAD")) return Material.SKULL_ITEM;
+        if (name.equalsIgnoreCase("STEVE_HEAD")) return Material.SKULL_ITEM;
         
         // 数字id
         try {
             int id = Integer.parseInt(name);
-            for (Material mat : Material.values()) {
-                if (mat.getId() == id) return mat;
-            }
+            Material idMaterial = Material.getMaterial(id);
+            if (idMaterial != null) return idMaterial;
         } catch (NumberFormatException e) {}
         
         // 名称匹配
