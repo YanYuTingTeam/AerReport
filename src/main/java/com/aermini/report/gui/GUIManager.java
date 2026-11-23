@@ -155,7 +155,7 @@ public class GUIManager {
         selectedPlayers.put(player.getUniqueId(), targetName);
         String title = menuConfig.getTitle();
         Inventory inv = Bukkit.createInventory(null, menuConfig.getSlot(), title);
-        ItemStack playerHead = GUIUtils.createPlayerHead(targetName,
+        ItemStack playerHead = GUIUtils.createHead(menuConfig.getItem("player"), targetName,
                 menuConfig.getName("player").replace("{reported}", targetName),
                 menuConfig.getLore("player"));
         int playerSlot = getSlot(menuConfig, "player");
@@ -298,28 +298,17 @@ public class GUIManager {
                     menuConfig.getData("backindex"), menuConfig.getName("backindex"), new ArrayList<>());
             inv.setItem(backindexSlot, backindexItem);
         }
+        String volunItem = patrol ? "volun_off" : "volun_on";
+        int volunSlot = getSlot(menuConfig, volunItem);
+        if (volunSlot >= 0 && volunSlot < inv.getSize()) {
+            ItemStack volunStack = GUIUtils.createItem(menuConfig.getItem(volunItem), 1,
+                    menuConfig.getData(volunItem), menuConfig.getName(volunItem),
+                    menuConfig.getLore(volunItem) != null && !menuConfig.getLore(volunItem).isEmpty()
+                            ? menuConfig.getLore(volunItem) : new ArrayList<>());
+            inv.setItem(volunSlot, volunStack);
+        }
         reportManager.setStaffPage(player.getUniqueId(), page);
         openInvSync(player, inv);
-
-        final java.util.UUID pUuid = player.getUniqueId();
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            Player p = Bukkit.getPlayer(pUuid);
-            if (p == null || !p.isOnline()) return;
-            String openTitle = p.getOpenInventory().getTitle();
-            if (openTitle == null) return;
-            if (!menuConfig.getTitle().equals(openTitle)) return;
-            org.bukkit.inventory.Inventory topInv = p.getOpenInventory().getTopInventory();
-            if (topInv == null) return;
-            String volunItem = patrol ? "volun_off" : "volun_on";
-            int volunSlot = getSlot(menuConfig, volunItem);
-            if (volunSlot >= 0) {
-                ItemStack volunStack = GUIUtils.createItem(menuConfig.getItem(volunItem), 1,
-                        menuConfig.getData(volunItem), menuConfig.getName(volunItem),
-                        menuConfig.getLore(volunItem) != null && !menuConfig.getLore(volunItem).isEmpty()
-                                ? menuConfig.getLore(volunItem) : new ArrayList<>());
-                topInv.setItem(volunSlot, volunStack);
-            }
-        });
         });
         });
     }

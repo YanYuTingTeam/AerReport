@@ -440,7 +440,8 @@ public class ReportManager {
     public void releaseProcessClaim(int reportId, String staffUuid) {
         String sql = "UPDATE " + db.getTablePrefix() + "reports SET status = 'pending', " +
                 "processed_by = NULL, processed_by_name = NULL, processed_time = NULL " +
-                "WHERE reported = ? AND report_type = ? AND processed_by = ? AND status = 'processed' " +
+                "WHERE reported = ? AND (report_type = ? OR (reason_id = 'volunteer' AND report_type = 'other')) " +
+                "AND processed_by = ? AND status = 'processed' " +
                 "AND processed_time = ? AND ban_id IS NULL";
         db.asyncRun(() -> {
             ReportRecord record = getReport(reportId);
@@ -465,7 +466,8 @@ public class ReportManager {
         String lockSql = "SELECT status FROM " + db.getTablePrefix() + "reports WHERE id = ? FOR UPDATE";
         String updateSql = "UPDATE " + db.getTablePrefix() + "reports SET status = ?, " +
                 "processed_by = ?, processed_by_name = ?, processed_time = ?, processing_by = NULL " +
-                "WHERE reported = ? AND report_type = ? AND status IN ('pending', 'processing')";
+                "WHERE reported = ? AND (report_type = ? OR (? = 'processed' AND reason_id = 'volunteer' AND report_type = 'other')) " +
+                "AND status IN ('pending', 'processing')";
         db.asyncRun(() -> {
             boolean ok = false;
             try (Connection conn = db.getConnection()) {
@@ -494,6 +496,7 @@ public class ReportManager {
                         updateStmt.setLong(4, processTime);
                         updateStmt.setString(5, reportedUuid);
                         updateStmt.setString(6, reportType);
+                        updateStmt.setString(7, newStatus);
                         rows = updateStmt.executeUpdate();
                     }
                     if (rows >= 1) {
@@ -637,7 +640,14 @@ public class ReportManager {
     private void linkOtherReports(String reportedUuid, String reportType, int reportId,
                                   String staffUuid, String staffName, long processTime,
                                   String reasonId, String reasonName, String banId) {
-        linkGroupReports(reportedUuid, reportType, reportId, processTime);
+        String sql = "UPDATE " + db.getTablePrefix() + "reports SET linked_report_id = ? " +
+                "WHERE reported = ? AND (report_type = ? OR (reason_id = 'volunteer' AND report_type = 'other')) " +
+                "AND id != ? AND status = 'processed' AND processed_by = ? AND processed_time = ?";
+        try {
+            db.update(sql, reportId, reportedUuid, reportType, reportId, staffUuid, processTime);
+        } catch (SQLException e) {
+            plugin.getLogger().severe("关联其他举报失败 -> " + e.getMessage());
+        }
     }
 
     public void asyncFullResetAllData(Player player) {
